@@ -9,6 +9,15 @@ env/
 .env
 .env.*
 !.env.example
+!backend/.env.example
+
+# Media and audio uploads
+*.webm
+*.wav
+*.mp3
+*.ogg
+uploads/
+recordings/
 
 # Local application data
 *.db

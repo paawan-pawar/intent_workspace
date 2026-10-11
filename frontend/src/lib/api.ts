@@ -102,6 +102,12 @@ export const MeetingSchema = z.object({
   status: z.string(),
   link: z.string().optional(),
   notes: z.boolean().optional(),
+  scheduledDate: z.string().optional(),
+  meetLink: z.string().optional(),
+  recording: z.string().optional(),
+  transcript: z.string().optional(),
+  summary: z.string().optional(),
+  heldAt: z.string().optional(),
 })
 export type MeetingModel = z.infer<typeof MeetingSchema>
 
@@ -136,6 +142,93 @@ export const PreferencesSchema = z.object({
 
 export type Preferences = z.infer<typeof PreferencesSchema>
 
+
+// ── Calendar Event (full model for CRUD) ─────────────────────
+
+export const CalendarEventFullSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  description: z.string(),
+  date: z.string(),
+  start_time: z.string(),
+  end_time: z.string(),
+  location: z.string(),
+  attendees: z.array(z.string()),
+  calendar: z.string(),
+  sync_status: z.string(),
+})
+
+export type CalendarEventFull = z.infer<typeof CalendarEventFullSchema>
+
+export interface CalendarEventCreatePayload {
+  title: string
+  description?: string
+  date: string
+  start_time: string
+  end_time: string
+  location?: string
+  attendees?: string[]
+  calendar?: string
+  sync_status?: string
+}
+
+export interface CalendarEventUpdatePayload {
+  title?: string
+  description?: string
+  date?: string
+  start_time?: string
+  end_time?: string
+  location?: string
+  attendees?: string[]
+  calendar?: string
+  sync_status?: string
+}
+
+
+// ── Connections ──────────────────────────────────────────────
+
+export const ConnectionStatusSchema = z.object({
+  id: z.string(),
+  provider: z.string(),
+  connected: z.boolean(),
+  demo_mode: z.boolean(),
+  last_sync_at: z.number().nullable(),
+  sync_error: z.string().nullable(),
+  event_count: z.number(),
+  credentials_configured: z.boolean(),
+  last_sync_result: z.string().nullable(),
+})
+
+export type ConnectionStatus = z.infer<typeof ConnectionStatusSchema>
+
+export const SyncResultSchema = z.object({
+  success: z.boolean(),
+  events_synced: z.number(),
+  message: z.string(),
+  timestamp: z.number(),
+  demo_mode: z.boolean(),
+})
+
+export type SyncResult = z.infer<typeof SyncResultSchema>
+
+export const OAuthStartSchema = z.object({
+  auth_url: z.string(),
+  demo_mode: z.boolean(),
+  message: z.string(),
+})
+
+export type OAuthStartResponse = z.infer<typeof OAuthStartSchema>
+
+// Meeting processing result
+export interface MeetingProcessResult {
+  transcript: string
+  formatted_transcript: string
+  segments: { start: number; end: number; text: string }[]
+  summary: string
+  duration: string
+  error?: string
+}
+
 // API fetch functions
 export const apiService = {
   async getHealth(): Promise<HealthResponse> {
@@ -165,5 +258,68 @@ export const apiService = {
   async putPreferences(role: string, prefs: Preferences): Promise<Preferences> {
     const { data } = await api.put(`/preferences/${role}`, prefs)
     return PreferencesSchema.parse(data)
-  }
+  },
+
+  /**
+   * Upload meeting audio → Groq Whisper transcription → LLM summarization.
+   * Returns transcript, timestamped transcript, AI summary, and duration.
+   */
+  async processMeeting(audioBlob: Blob, title: string): Promise<MeetingProcessResult> {
+    const formData = new FormData()
+    formData.append('audio', audioBlob, 'meeting.webm')
+    formData.append('title', title)
+    const { data } = await api.post('/meetings/process', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+    return data
+  },
+
+  /** Summarize from existing transcript text (no audio). */
+  async summarizeMeeting(transcript: string, title: string): Promise<{ summary: string }> {
+    const { data } = await api.post('/meetings/summarize', { transcript, title })
+    return data
+  },
+
+  // ── Calendar Events ──────────────────────────────────────
+  async getCalendarEvents(startDate?: string, endDate?: string): Promise<CalendarEventFull[]> {
+    const params: Record<string, string> = {}
+    if (startDate) params.start_date = startDate
+    if (endDate) params.end_date = endDate
+    const { data } = await api.get('/calendar/events', { params })
+    return z.array(CalendarEventFullSchema).parse(data)
+  },
+  async createCalendarEvent(payload: CalendarEventCreatePayload): Promise<CalendarEventFull> {
+    const { data } = await api.post('/calendar/events', payload)
+    return CalendarEventFullSchema.parse(data)
+  },
+  async updateCalendarEvent(id: number, payload: CalendarEventUpdatePayload): Promise<CalendarEventFull> {
+    const { data } = await api.put(`/calendar/events/${id}`, payload)
+    return CalendarEventFullSchema.parse(data)
+  },
+  async deleteCalendarEvent(id: number): Promise<void> {
+    await api.delete(`/calendar/events/${id}`)
+  },
+
+  // ── Connections ──────────────────────────────────────────
+  async getConnections(): Promise<ConnectionStatus[]> {
+    const { data } = await api.get('/connections')
+    return z.array(ConnectionStatusSchema).parse(data)
+  },
+  async getConnection(id: string): Promise<ConnectionStatus> {
+    const { data } = await api.get(`/connections/${id}`)
+    return ConnectionStatusSchema.parse(data)
+  },
+  async toggleConnection(id: string, action: 'connect' | 'disconnect'): Promise<ConnectionStatus> {
+    const { data } = await api.post(`/connections/${id}/toggle`, { action })
+    return ConnectionStatusSchema.parse(data)
+  },
+  async syncConnection(id: string): Promise<SyncResult> {
+    const { data } = await api.post(`/connections/${id}/sync`)
+    return SyncResultSchema.parse(data)
+  },
+  async startOAuth(): Promise<OAuthStartResponse> {
+    const { data } = await api.get('/connections/google-calendar/oauth/start')
+    return OAuthStartSchema.parse(data)
+  },
 }

@@ -14,6 +14,7 @@ import { CalendarPage } from '@/features/workspace/pages/CalendarPage'
 import { MeetingsPage } from '@/features/workspace/pages/MeetingsPage'
 import { TasksPage } from '@/features/workspace/pages/TasksPage'
 import { NotesPage } from '@/features/workspace/pages/NotesPage'
+import { ConnectionsPage } from '@/features/workspace/pages/ConnectionsPage'
 import { cn } from '@/lib/utils'
 
 export function WorkspacePage() {
@@ -226,7 +227,7 @@ export function WorkspacePage() {
                 </button>
               )
             })}
-            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-surface-600 hover:bg-surface-50 hover:text-surface-900 transition-colors">
+            <button onClick={() => navigate('/connections')} className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors", location.pathname === '/connections' ? "bg-brand-50 text-brand-700" : "text-surface-600 hover:bg-surface-50 hover:text-surface-900")}>
               <Zap className="w-4 h-4" /> Connections
             </button>
           </nav>
@@ -391,6 +392,8 @@ export function WorkspacePage() {
             <TasksPage />
           ) : location.pathname === '/notes' ? (
             <NotesPage />
+          ) : location.pathname === '/connections' ? (
+            <ConnectionsPage />
           ) : (
             <DashboardGrid 
               plan={currentPlan || undefined} 

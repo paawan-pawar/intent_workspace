@@ -2,12 +2,90 @@ import os
 import json
 import logging
 from openai import AsyncOpenAI
+from dotenv import load_dotenv
 from app.services.dashboard_service import get_dashboard_plan
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 
+load_dotenv()
+
 logger = logging.getLogger(__name__)
 
+# ── Groq Configuration ──────────────────────────────────────────────────────────
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+FALLBACK_MODELS = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+
+
+def get_groq_api_key() -> str | None:
+    key = os.environ.get("GROQ_API_KEY")
+    if not key or key == "gsk_your_key_here":
+        # Attempt to reload .env in case it was updated while server was running
+        load_dotenv(override=True)
+        key = os.environ.get("GROQ_API_KEY")
+    if not key or key == "gsk_your_key_here":
+        return None
+    return key
+
+
+def get_groq_model() -> str:
+    return os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+
+GROQ_MODEL = get_groq_model()
+
+
+def get_groq_client() -> AsyncOpenAI | None:
+    """
+    Returns a configured AsyncOpenAI client pointed at Groq's API.
+    Returns None if no API key is set.
+    """
+    key = get_groq_api_key()
+    if not key:
+        return None
+    return AsyncOpenAI(
+        api_key=key,
+        base_url=GROQ_BASE_URL,
+    )
+
+
+async def groq_chat(
+    messages: list[dict[str, str]],
+    model: str | None = None,
+    temperature: float = 0.7,
+    json_mode: bool = False,
+    max_tokens: int = 4096,
+) -> str | None:
+    """
+    Sends a chat completion to Groq with automatic fallback to alternate models
+    if the chosen model is unavailable (e.g., 404 model_not_found).
+    """
+    client = get_groq_client()
+    if not client:
+        logger.warning("Groq API key not set — chat completion skipped.")
+        return None
+
+    primary_model = model or get_groq_model()
+    candidate_models = [primary_model] + [m for m in FALLBACK_MODELS if m != primary_model]
+
+    for candidate in candidate_models:
+        try:
+            kwargs: dict[str, Any] = {
+                "model": candidate,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            if json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+            response = await client.chat.completions.create(**kwargs)
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.warning(f"Groq API call with model '{candidate}' failed: {e}. Trying fallback if available...")
+
+    logger.error("All Groq model candidates failed.")
+    return None
+
+
+# ── Dashboard AI Models ──────────────────────────────────────────────────────────
 # Re-defining models here for the AI generation to be validated
 class WidgetPlan(BaseModel):
     id: str
@@ -64,12 +142,8 @@ You MUST respond strictly with a valid JSON matching this schema:
 """
 
 async def generate_dashboard_update(prompt: str, role: str, current_widgets: List[Dict[str, Any]], pinned_ids: List[str], hidden_ids: List[str]) -> AIPromptResponse:
-    # Try using OpenAI if configured
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if api_key:
-        try:
-            client = AsyncOpenAI(api_key=api_key)
-            user_message = f"""
+    # Try using Groq (OpenAI-compatible)
+    user_message = f"""
 Role: {role}
 Current Goal/Prompt: {prompt}
 Current Widgets: {json.dumps(current_widgets)}
@@ -78,26 +152,22 @@ Hidden Widget IDs (Must Drop): {hidden_ids}
 
 Return the adapted dashboard plan JSON.
 """
-            response = await client.chat.completions.create(
-                model="gpt-4o",  # or a similar JSON supporting model
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.7
-            )
-            
-            content = response.choices[0].message.content
-            parsed = json.loads(content)
+    result = await groq_chat(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ],
+        json_mode=True,
+    )
+
+    if result:
+        try:
+            parsed = json.loads(result)
             return AIPromptResponse(**parsed)
         except Exception as e:
-            logger.error(f"OpenAI API failed: {e}")
-            # Fall back to simulation on error
-            pass
+            logger.error(f"Failed to parse Groq response: {e}")
 
     # Simulation fallback if no key or API fails (Local prototype logic)
-    # We'll simulate a basic response that adds a "meeting_notes" and "tasks" if it mentions "meeting", etc.
     return _simulate_ai_response(prompt, role, current_widgets, pinned_ids, hidden_ids)
 
 def _simulate_ai_response(prompt: str, role: str, current_widgets: List[Dict], pinned_ids: List[str], hidden_ids: List[str]) -> AIPromptResponse:
