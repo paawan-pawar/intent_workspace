@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { FileSpreadsheet, Loader2, Sparkles, Upload } from 'lucide-react'
+import { FileSpreadsheet, Loader2, Sparkles, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { SheetRecord } from '@/lib/sheets'
 
@@ -13,6 +13,7 @@ interface PromptComposerProps {
 }
 
 const SUGGESTED_CHIPS = [
+  "Build my daily dashboard",
   "Prepare for my next meeting",
   "Show overdue work",
   "Summarize my day",
@@ -83,6 +84,18 @@ export function PromptComposer({ isLoading, onSubmit, sheets, selectedSheetId, o
             </option>
           ))}
         </select>
+        {selectedSheetId && (
+          <button
+            type="button"
+            onClick={() => onSelectedSheetChange('')}
+            disabled={isLoading}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-surface-200 bg-white text-surface-500 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Remove selected sheet"
+            aria-label="Remove selected sheet"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
         <input
           ref={fileInputRef}
           type="file"

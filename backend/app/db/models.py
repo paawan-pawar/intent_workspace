@@ -146,3 +146,21 @@ class CalendarSheetAttachment(Base):
     event_id = Column(Integer, nullable=False, index=True)
     sheet_id = Column(String, nullable=False, index=True)
     attached_at = Column(String, nullable=False)
+
+
+class SharedDashboard(Base):
+    """A publicly-viewable snapshot of a user's dashboard, accessed via a unique token."""
+    __tablename__ = "shared_dashboards"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String, unique=True, nullable=False, index=True)
+    role_id = Column(String, nullable=False)
+    role_name = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    explanation = Column(Text, nullable=True)
+    theme = Column(String, nullable=True, default="indigo")
+    widgets = Column(JSON, nullable=False, default=list)
+    shared_by = Column(String, nullable=False, default="Prototype User")
+    created_at = Column(String, nullable=False)
+    expires_at = Column(String, nullable=True)  # Optional ISO datetime for expiry
+    view_count = Column(Integer, nullable=False, default=0)

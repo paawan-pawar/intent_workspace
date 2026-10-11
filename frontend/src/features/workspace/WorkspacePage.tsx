@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LogOut, LayoutDashboard, RefreshCw, Undo2, HelpCircle, Save, ChevronDown, List, Calendar, Mail, FileText, CheckSquare, Zap, Clock, CalendarPlus, User, Sparkles, Table2, Target } from 'lucide-react'
+import { LogOut, LayoutDashboard, RefreshCw, Undo2, HelpCircle, Save, ChevronDown, List, Calendar, Mail, FileText, CheckSquare, Zap, Clock, CalendarPlus, Sparkles, Table2, Target, Share2 } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useUser } from '@/app/providers/UserProvider'
 import { useToast } from '@/app/providers/ToastProvider'
@@ -19,9 +19,10 @@ import { SheetsPage } from '@/features/workspace/pages/SheetsPage'
 import { GoalsPage } from '@/features/workspace/pages/GoalsPage'
 import type { SheetRecord } from '@/lib/sheets'
 import { cn } from '@/lib/utils'
+import { ShareDashboardModal } from '@/features/workspace/components/ShareDashboardModal'
 
 export function WorkspacePage() {
-  const { role, setRole, clearRole } = useUser()
+  const { role, setRole, profile, logout } = useUser()
   const navigate = useNavigate()
   const location = useLocation()
   const { showToast } = useToast()
@@ -71,6 +72,7 @@ export function WorkspacePage() {
   const [isAiLoading, setIsAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const [selectedSheetId, setSelectedSheetId] = useState('')
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
 
   const handleDashboardSheetUpload = async (file: File) => {
     const extension = file.name.toLowerCase().split('.').pop() ?? ''
@@ -368,18 +370,34 @@ export function WorkspacePage() {
             <button
               type="button"
               onClick={() => navigate('/profile')}
-              className="flex flex-1 min-w-0 items-center gap-3 rounded-lg text-left hover:bg-surface-50 transition-colors"
+              className="flex flex-1 min-w-0 items-center gap-3 rounded-lg text-left hover:bg-surface-50 transition-colors p-1"
               aria-label="Open profile"
             >
-              <div className="w-8 h-8 rounded-full bg-surface-200 flex items-center justify-center text-surface-600 shrink-0">
-                <User className="w-4 h-4" />
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 overflow-hidden shadow-sm"
+                style={{ backgroundColor: profile.avatarColor || '#6366f1' }}
+              >
+                {profile.photoURL ? (
+                  <img src={profile.photoURL} alt={profile.displayName} className="w-full h-full object-cover" />
+                ) : (
+                  profile.displayName ? profile.displayName.charAt(0).toUpperCase() : 'U'
+                )}
               </div>
-              <div className="min-w-0">
-                <div className="text-sm font-bold text-surface-900 truncate">Prototype User</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-surface-900 truncate">{profile.displayName || 'Prototype User'}</div>
                 <div className="text-xs font-medium text-brand-600 truncate">{role.name}</div>
               </div>
             </button>
-            <button onClick={clearRole} className="p-1.5 text-surface-400 hover:text-surface-900 transition-colors shrink-0" title="Logout" aria-label="Logout">
+            <button
+              onClick={async () => {
+                await logout()
+                showToast('Signed out of workspace')
+                navigate('/login')
+              }}
+              className="p-1.5 text-surface-400 hover:text-red-600 transition-colors shrink-0"
+              title="Logout"
+              aria-label="Logout"
+            >
               <LogOut className="w-4 h-4" />
             </button>
           </div>
@@ -441,6 +459,22 @@ export function WorkspacePage() {
               <Button variant="ghost" size="sm" onClick={resetFilters} title="Reset to default layout">
                 <RefreshCw className="w-4 h-4 sm:mr-2" /> <span className="hidden sm:inline">Reset</span>
               </Button>
+
+              {isDashboard && currentPlan && (
+                <>
+                  <div className="h-6 w-px bg-surface-200 mx-1" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsShareModalOpen(true)}
+                    className="gap-1.5 bg-violet-50/60 hover:bg-violet-100 hover:text-violet-700 border-violet-200 text-violet-700 shadow-sm"
+                    title="Share this dashboard"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Share</span>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -555,6 +589,16 @@ export function WorkspacePage() {
           )}
         </div>
       </main>
+
+      {/* Share Dashboard Modal */}
+      {currentPlan && (
+        <ShareDashboardModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          plan={currentPlan}
+          roleName={role.name}
+        />
+      )}
     </div>
   )
 }

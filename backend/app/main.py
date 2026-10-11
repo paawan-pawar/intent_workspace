@@ -14,6 +14,7 @@ from app.api.meetings import router as meetings_router
 from app.api.gmail import router as gmail_router
 from app.api.sheets import router as sheets_router
 from app.api.sheet_links import router as sheet_links_router
+from app.api.shared_dashboard import router as shared_dashboard_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,6 +56,7 @@ app.include_router(meetings_router, prefix="/api")
 app.include_router(gmail_router, prefix="/api")
 app.include_router(sheets_router, prefix="/api")
 app.include_router(sheet_links_router, prefix="/api")
+app.include_router(shared_dashboard_router, prefix="/api")
 
 @app.get("/")
 async def root():

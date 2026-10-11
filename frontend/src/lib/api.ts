@@ -739,4 +739,32 @@ export const apiService = {
     const { data } = await api.get('/gmail/check')
     return data
   },
+
+  // ── Shared Dashboards ──────────────────────────────────────
+  async createSharedDashboard(payload: {
+    role_id: string
+    role_name: string
+    title: string
+    explanation?: string
+    theme?: string
+    widgets: WidgetModel[]
+    shared_by?: string
+  }): Promise<{ token: string; share_url: string; created_at: string }> {
+    const { data } = await api.post('/shared-dashboards', payload)
+    return data
+  },
+  async getSharedDashboard(token: string): Promise<{
+    token: string
+    title: string
+    role_name: string
+    explanation?: string
+    theme?: string
+    widgets: WidgetModel[]
+    shared_by: string
+    created_at: string
+    view_count: number
+  }> {
+    const { data } = await api.get(`/shared-dashboards/${token}`)
+    return data
+  },
 }

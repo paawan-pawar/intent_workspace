@@ -2,6 +2,7 @@ import { getApp, getApps, initializeApp } from 'firebase/app'
 import {
   createUserWithEmailAndPassword,
   getAuth,
+  onAuthStateChanged,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -76,3 +77,21 @@ export async function refreshVerifiedUser(): Promise<User> {
 export async function sendResetEmail(email: string) {
   await sendPasswordResetEmail(requireAuth(), email)
 }
+
+export async function logOut() {
+  if (auth) {
+    await signOut(auth)
+  }
+}
+
+export async function updateUserDisplayName(displayName: string, photoURL?: string) {
+  const user = auth?.currentUser
+  if (user) {
+    await updateProfile(user, {
+      displayName,
+      ...(photoURL !== undefined ? { photoURL } : {}),
+    })
+  }
+}
+
+export { onAuthStateChanged }
