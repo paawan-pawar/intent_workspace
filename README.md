@@ -47,7 +47,7 @@ flowchart LR
 
     subgraph edge[Development edge]
         vite[Vite dev server :5173]
-        proxy[/api proxy]
+        proxy["/api proxy"]
     end
 
     subgraph api[FastAPI :8001]
