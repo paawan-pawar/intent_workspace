@@ -49,3 +49,30 @@ class CalendarConnection(Base):
     google_sync_token = Column(String, nullable=True)
     # Last sync result message for display
     last_sync_result = Column(Text, nullable=True)
+
+
+class GmailConnection(Base):
+    """Tracks Gmail integration connection state and tokens."""
+    __tablename__ = "gmail_connections"
+
+    id = Column(String, primary_key=True, index=True)          # "gmail"
+    provider = Column(String, nullable=False, default="Gmail")
+    connected = Column(Boolean, default=False)
+    demo_mode = Column(Boolean, default=True)
+    last_sync_at = Column(Float, default=None, nullable=True)   # Unix timestamp
+    sync_error = Column(Text, default=None, nullable=True)
+    message_count = Column(Integer, default=0)
+    credentials_configured = Column(Boolean, default=False)
+    email_address = Column(String, nullable=True)               # Connected Gmail address
+    # OAuth tokens — stored server-side only, never exposed to frontend
+    access_token = Column(Text, nullable=True)
+    refresh_token = Column(Text, nullable=True)
+    token_expiry = Column(Float, nullable=True)                 # Unix timestamp
+    # Gmail history ID for incremental sync
+    history_id = Column(String, nullable=True)
+    # Pub/Sub watch expiration (Unix timestamp ms)
+    watch_expiration = Column(Float, nullable=True)
+    # Last sync result message for display
+    last_sync_result = Column(Text, nullable=True)
+    # Unread count cache
+    unread_count = Column(Integer, default=0)

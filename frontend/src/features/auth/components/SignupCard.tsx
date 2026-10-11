@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { IntentLogo } from './IntentLogo'
 import { Eye, EyeOff, Loader2, AlertCircle, ArrowRight } from 'lucide-react'
+import { signUpWithEmail } from '@/lib/firebase'
 
 interface SignupCardProps {
   onNavigateToLogin: () => void
@@ -36,6 +37,7 @@ export const SignupCard: React.FC<SignupCardProps> = ({
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
   const [termsError, setTermsError] = useState<string | null>(null)
+  const [generalError, setGeneralError] = useState<string | null>(null)
 
   // Password strength calculation (0 to 4)
   const calculateStrength = (pwd: string): { score: number; label: string; color: string } => {
@@ -61,6 +63,7 @@ export const SignupCard: React.FC<SignupCardProps> = ({
     setPasswordError(null)
     setConfirmError(null)
     setTermsError(null)
+    setGeneralError(null)
 
     if (!fullName.trim()) {
       setNameError('Full name is required.')
@@ -99,17 +102,20 @@ export const SignupCard: React.FC<SignupCardProps> = ({
     return isValid
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validate()) return
 
     setIsLoading(true)
 
-    // Simulate creation & navigate to OTP verification screen
-    setTimeout(() => {
+    try {
+      await signUpWithEmail(email.trim(), password, fullName.trim())
       setIsLoading(false)
       onSignupSuccess({ email, name: fullName, profession })
-    }, 700)
+    } catch (error) {
+      setIsLoading(false)
+      setGeneralError(error instanceof Error ? error.message : 'Unable to create your account. Please try again.')
+    }
   }
 
   return (
@@ -124,6 +130,15 @@ export const SignupCard: React.FC<SignupCardProps> = ({
           Tell us a little about yourself so we can personalize your dashboard.
         </p>
       </div>
+
+      {generalError && (
+        <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm font-medium text-red-700">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{generalError}</span>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {/* Full Name */}

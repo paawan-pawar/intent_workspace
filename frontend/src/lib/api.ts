@@ -82,6 +82,61 @@ export const EmailSchema = z.object({
 })
 export type EmailModel = z.infer<typeof EmailSchema>
 
+// ── Gmail Types ─────────────────────────────────────────────
+
+export interface GmailMessage {
+  id: string
+  threadId: string
+  sender: string
+  senderEmail: string
+  subject: string
+  snippet: string
+  date: string
+  unread: boolean
+  starred: boolean
+  hasAttachments: boolean
+  labelIds: string[]
+  category: 'focused' | 'other'
+  body_html?: string
+  body_text?: string
+}
+
+export interface GmailConnection {
+  id: string
+  provider: string
+  connected: boolean
+  demo_mode: boolean
+  last_sync_at: number | null
+  sync_error: string | null
+  message_count: number
+  credentials_configured: boolean
+  last_sync_result: string | null
+  email_address: string | null
+  unread_count: number
+}
+
+export interface GmailInboxResponse {
+  messages: GmailMessage[]
+  nextPageToken: string | null
+  resultSizeEstimate: number
+  connected: boolean
+  demo_mode: boolean
+}
+
+export interface GmailSyncResult {
+  success: boolean
+  new_messages: number
+  message: string
+  timestamp: number
+  demo_mode: boolean
+}
+
+export interface GmailOAuthResponse {
+  auth_url: string
+  demo_mode: boolean
+  message: string
+}
+
 export const CalendarEventSchema = z.object({
   id: z.number(),
   title: z.string(),
@@ -321,5 +376,45 @@ export const apiService = {
   async startOAuth(): Promise<OAuthStartResponse> {
     const { data } = await api.get('/connections/google-calendar/oauth/start')
     return OAuthStartSchema.parse(data)
+  },
+
+  // ── Gmail ─────────────────────────────────────────────────
+  async getGmailConnection(): Promise<GmailConnection> {
+    const { data } = await api.get('/gmail/connection')
+    return data
+  },
+  async startGmailOAuth(): Promise<GmailOAuthResponse> {
+    const { data } = await api.get('/gmail/oauth/start')
+    return data
+  },
+  async connectGmailDemo(): Promise<GmailConnection> {
+    const { data } = await api.post('/gmail/connect')
+    return data
+  },
+  async disconnectGmail(): Promise<GmailConnection> {
+    const { data } = await api.post('/gmail/disconnect')
+    return data
+  },
+  async getGmailMessages(params?: {
+    q?: string; max_results?: number; page_token?: string; category?: string
+  }): Promise<GmailInboxResponse> {
+    const { data } = await api.get('/gmail/messages', { params })
+    return data
+  },
+  async getGmailMessage(messageId: string): Promise<GmailMessage> {
+    const { data } = await api.get(`/gmail/messages/${messageId}`)
+    return data
+  },
+  async modifyGmailMessage(messageId: string, action: 'read' | 'unread' | 'star' | 'unstar'): Promise<GmailMessage> {
+    const { data } = await api.post(`/gmail/messages/${messageId}/modify`, { action })
+    return data
+  },
+  async syncGmail(): Promise<GmailSyncResult> {
+    const { data } = await api.post('/gmail/sync')
+    return data
+  },
+  async checkGmailUpdates(): Promise<{ hasUpdates: boolean; unreadCount: number; historyId: string | null }> {
+    const { data } = await api.get('/gmail/check')
+    return data
   },
 }

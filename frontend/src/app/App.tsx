@@ -4,6 +4,7 @@ import { UserProvider } from '@/app/providers/UserProvider'
 import { ToastProvider } from '@/app/providers/ToastProvider'
 import { OnboardingPage } from '@/features/onboarding/OnboardingPage'
 import { WorkspacePage } from '@/features/workspace/WorkspacePage'
+import { ProfilePage } from '@/features/profile/ProfilePage'
 import { AuthPage } from '@/features/auth/AuthPage'
 import { ArrowRight, LogIn, Sparkles } from 'lucide-react'
 import { IntentLogo } from '@/features/auth/components/IntentLogo'
@@ -84,6 +85,7 @@ function App() {
             <Route path="/signup" element={<AuthPage />} />
             <Route path="/onboarding" element={<OnboardingPage />} />
             <Route path="/workspace" element={<WorkspacePage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="*" element={<WorkspacePage />} />
           </Routes>
         </BrowserRouter>

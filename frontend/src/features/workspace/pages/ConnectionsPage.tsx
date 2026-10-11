@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Zap,
   Calendar,
+  Mail,
   RefreshCw,
   CheckCircle2,
   XCircle,
@@ -16,7 +17,7 @@ import {
   LogIn,
 } from 'lucide-react'
 import { useToast } from '@/app/providers/ToastProvider'
-import { apiService, ConnectionStatus, SyncResult } from '@/lib/api'
+import { apiService, ConnectionStatus, SyncResult, GmailConnection, GmailSyncResult } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -41,16 +42,23 @@ function formatTimestamp(ts: number | null): string {
 export function ConnectionsPage() {
   const { showToast } = useToast()
 
-  // Connection state — sourced from backend
+  // Calendar connection state — sourced from backend
   const [connections, setConnections] = useState<ConnectionStatus[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // Action state
+  // Calendar action state
   const [isToggling, setIsToggling] = useState<string | null>(null)
   const [isSyncing, setIsSyncing] = useState<string | null>(null)
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null)
   const [isStartingOAuth, setIsStartingOAuth] = useState(false)
+
+  // Gmail connection state
+  const [gmailConn, setGmailConn] = useState<GmailConnection | null>(null)
+  const [isGmailToggling, setIsGmailToggling] = useState(false)
+  const [isGmailSyncing, setIsGmailSyncing] = useState(false)
+  const [gmailSyncResult, setGmailSyncResult] = useState<GmailSyncResult | null>(null)
+  const [isStartingGmailOAuth, setIsStartingGmailOAuth] = useState(false)
 
   // Check for OAuth callback params in URL
   useEffect(() => {
@@ -59,6 +67,10 @@ export function ConnectionsPage() {
       showToast('Google Calendar connected successfully!')
       window.history.replaceState({}, '', '/connections')
       fetchConnections()
+    } else if (params.get('gmail_connected') === 'true') {
+      showToast('Gmail connected successfully!')
+      window.history.replaceState({}, '', '/connections')
+      fetchGmailConnection()
     } else if (params.get('error')) {
       const err = params.get('error')
       showToast(`Connection failed: ${err === 'invalid_state' ? 'Invalid OAuth state' : err}`)
@@ -82,11 +94,21 @@ export function ConnectionsPage() {
     }
   }, [])
 
+  const fetchGmailConnection = useCallback(async () => {
+    try {
+      const data = await apiService.getGmailConnection()
+      setGmailConn(data)
+    } catch {
+      // Gmail connection might not exist yet
+    }
+  }, [])
+
   useEffect(() => {
     fetchConnections()
-  }, [fetchConnections])
+    fetchGmailConnection()
+  }, [fetchConnections, fetchGmailConnection])
 
-  // ── Handlers ─────────────────────────────────────────────
+  // ── Calendar Handlers ─────────────────────────────────────
 
   const handleConnect = async (conn: ConnectionStatus) => {
     if (conn.credentials_configured) {
@@ -157,6 +179,73 @@ export function ConnectionsPage() {
       await fetchConnections()
     } finally {
       setIsSyncing(null)
+    }
+  }
+
+  // ── Gmail Handlers ─────────────────────────────────────────
+
+  const handleGmailConnect = async () => {
+    if (gmailConn?.credentials_configured) {
+      setIsStartingGmailOAuth(true)
+      try {
+        const result = await apiService.startGmailOAuth()
+        if (result.demo_mode || !result.auth_url) {
+          await handleGmailDemoConnect()
+        } else {
+          window.location.href = result.auth_url
+        }
+      } catch {
+        showToast('Failed to start Gmail OAuth flow')
+        await handleGmailDemoConnect()
+      } finally {
+        setIsStartingGmailOAuth(false)
+      }
+    } else {
+      await handleGmailDemoConnect()
+    }
+  }
+
+  const handleGmailDemoConnect = async () => {
+    setIsGmailToggling(true)
+    try {
+      const conn = await apiService.connectGmailDemo()
+      setGmailConn(conn)
+      showToast('Gmail connected (demo mode)')
+    } catch {
+      showToast('Failed to connect Gmail')
+    } finally {
+      setIsGmailToggling(false)
+    }
+  }
+
+  const handleGmailDisconnect = async () => {
+    setIsGmailToggling(true)
+    setGmailSyncResult(null)
+    try {
+      const conn = await apiService.disconnectGmail()
+      setGmailConn(conn)
+      showToast('Gmail disconnected')
+    } catch {
+      showToast('Failed to disconnect Gmail')
+    } finally {
+      setIsGmailToggling(false)
+    }
+  }
+
+  const handleGmailSync = async () => {
+    setIsGmailSyncing(true)
+    setGmailSyncResult(null)
+    try {
+      const result = await apiService.syncGmail()
+      setGmailSyncResult(result)
+      await fetchGmailConnection()
+      showToast(result.message)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Sync failed'
+      showToast(`Gmail sync failed: ${message}`)
+      await fetchGmailConnection()
+    } finally {
+      setIsGmailSyncing(false)
     }
   }
 
@@ -355,6 +444,161 @@ export function ConnectionsPage() {
                       <li>Create <strong>OAuth 2.0</strong> credentials (Web application)</li>
                       <li>Add <code className="bg-brand-100/50 px-1 py-0.5 rounded text-[9px] font-mono">http://localhost:8001/api/connections/google-calendar/oauth/callback</code> as a redirect URI</li>
                       <li>Set <code className="bg-brand-100/50 px-1 py-0.5 rounded text-[9px] font-mono">GOOGLE_CLIENT_ID</code> and <code className="bg-brand-100/50 px-1 py-0.5 rounded text-[9px] font-mono">GOOGLE_CLIENT_SECRET</code> environment variables</li>
+                      <li>Restart the backend server</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Gmail Card ──────────────────────────────────────── */}
+        {gmailConn && (
+          <div className="bg-white rounded-2xl border border-surface-200 shadow-sm">
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'w-10 h-10 rounded-xl flex items-center justify-center shadow-sm',
+                  gmailConn.connected
+                    ? 'bg-red-50 text-red-500'
+                    : 'bg-surface-100 text-surface-400',
+                )}>
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-surface-900">{gmailConn.provider}</h3>
+                    {gmailConn.demo_mode && gmailConn.connected && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-widest bg-warning/15 text-warning-dark border border-warning/25">
+                        Demo Mode
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={cn(
+                      'inline-flex items-center gap-1 text-xs font-semibold',
+                      gmailConn.connected ? 'text-success' : 'text-surface-400',
+                    )}>
+                      {gmailConn.connected ? (
+                        <><CheckCircle2 className="w-3 h-3" /> Connected</>
+                      ) : (
+                        <><XCircle className="w-3 h-3" /> Disconnected</>
+                      )}
+                    </span>
+                    {gmailConn.connected && (
+                      <>
+                        {gmailConn.email_address && (
+                          <>
+                            <span className="text-surface-200">·</span>
+                            <span className="text-[11px] text-surface-400 font-medium">{gmailConn.email_address}</span>
+                          </>
+                        )}
+                        {gmailConn.unread_count > 0 && (
+                          <>
+                            <span className="text-surface-200">·</span>
+                            <span className="text-[11px] text-brand-600 font-semibold">{gmailConn.unread_count} unread</span>
+                          </>
+                        )}
+                        <span className="text-surface-200">·</span>
+                        <span className="text-[11px] text-surface-400 font-medium flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" /> {formatTimestamp(gmailConn.last_sync_at)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                {gmailConn.connected && (
+                  <button
+                    onClick={handleGmailSync}
+                    disabled={isGmailSyncing}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-surface-200 text-surface-600 hover:bg-surface-50 hover:text-surface-900 transition-all disabled:opacity-50"
+                  >
+                    {isGmailSyncing ? (
+                      <><RefreshCw className="w-3 h-3 animate-spin" /> Syncing</>
+                    ) : (
+                      <><ArrowRightLeft className="w-3 h-3" /> Sync Now</>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  onClick={() => gmailConn.connected ? handleGmailDisconnect() : handleGmailConnect()}
+                  disabled={isGmailToggling || isStartingGmailOAuth}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50',
+                    gmailConn.connected
+                      ? 'bg-white border border-surface-200 text-surface-600 hover:bg-surface-50 hover:text-danger'
+                      : 'bg-brand-600 text-white hover:bg-brand-500 shadow-sm',
+                  )}
+                >
+                  {isGmailToggling || isStartingGmailOAuth ? (
+                    <><RefreshCw className="w-3 h-3 animate-spin" /> ...</>
+                  ) : gmailConn.connected ? (
+                    <><Unplug className="w-3 h-3" /> Disconnect</>
+                  ) : gmailConn.credentials_configured ? (
+                    <><LogIn className="w-3 h-3" /> Connect with Google</>
+                  ) : (
+                    <><Plug className="w-3 h-3" /> Connect</>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Sync error */}
+            {gmailConn.sync_error && (
+              <div className="mx-4 mb-3 flex items-start gap-2 p-2.5 bg-danger/5 border border-danger/15 rounded-lg">
+                <AlertTriangle className="w-3.5 h-3.5 text-danger shrink-0 mt-0.5" />
+                <p className="text-xs text-danger font-medium">{gmailConn.sync_error}</p>
+              </div>
+            )}
+
+            {/* Sync result */}
+            {gmailSyncResult && (
+              <div className={cn(
+                'mx-4 mb-3 flex items-center gap-2 p-2.5 rounded-lg border',
+                gmailSyncResult.success
+                  ? 'bg-success/5 border-success/15'
+                  : 'bg-danger/5 border-danger/15'
+              )}>
+                {gmailSyncResult.success ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" />
+                ) : (
+                  <XCircle className="w-3.5 h-3.5 text-danger shrink-0" />
+                )}
+                <p className={cn('text-xs font-medium', gmailSyncResult.success ? 'text-success' : 'text-danger')}>
+                  {gmailSyncResult.message}
+                </p>
+              </div>
+            )}
+
+            {/* Last sync result from backend (persistent) */}
+            {!gmailSyncResult && gmailConn.last_sync_result && gmailConn.connected && (
+              <div className="mx-4 mb-3 flex items-center gap-2 p-2.5 bg-surface-50 rounded-lg border border-surface-100">
+                <Info className="w-3.5 h-3.5 text-surface-400 shrink-0" />
+                <p className="text-xs text-surface-500 font-medium">{gmailConn.last_sync_result}</p>
+              </div>
+            )}
+
+            {/* Setup instructions when not configured */}
+            {!gmailConn.credentials_configured && !gmailConn.connected && (
+              <div className="mx-4 mb-4 p-3 bg-brand-50/50 border border-brand-100 rounded-xl">
+                <div className="flex items-start gap-2">
+                  <Info className="w-3.5 h-3.5 text-brand-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-brand-900 mb-1.5">Gmail credentials not configured</p>
+                    <p className="text-[11px] text-brand-700 leading-relaxed mb-2">
+                      Without credentials, Gmail operates in <strong>demo mode</strong> — sample emails are displayed instead of real inbox data.
+                    </p>
+                    <p className="text-[11px] text-brand-700 leading-relaxed">To connect your real Gmail:</p>
+                    <ol className="text-[11px] text-brand-700 mt-1 space-y-0.5 list-decimal list-inside">
+                      <li>Use the same Google Cloud project as Calendar</li>
+                      <li>Enable the <strong>Gmail API</strong></li>
+                      <li>Add <code className="bg-brand-100/50 px-1 py-0.5 rounded text-[9px] font-mono">http://localhost:8001/api/gmail/oauth/callback</code> as a redirect URI</li>
                       <li>Restart the backend server</li>
                     </ol>
                   </div>

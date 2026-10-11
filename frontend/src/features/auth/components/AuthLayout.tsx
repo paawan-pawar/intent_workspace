@@ -64,7 +64,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                   : 'text-surface-600 hover:text-surface-900'
               }`}
             >
-              3. OTP Verify
+              3. Email Verify
             </button>
             <button
               type="button"

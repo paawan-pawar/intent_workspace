@@ -254,13 +254,20 @@ export function WorkspacePage() {
 
         <div className="p-4 border-t border-surface-200">
           <div className="flex items-center gap-3 px-2 py-2">
-            <div className="w-8 h-8 rounded-full bg-surface-200 flex items-center justify-center text-surface-600 shrink-0">
-              <User className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-surface-900 truncate">Prototype User</div>
-              <div className="text-xs font-medium text-brand-600 truncate">{role.name}</div>
-            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/profile')}
+              className="flex flex-1 min-w-0 items-center gap-3 rounded-lg text-left hover:bg-surface-50 transition-colors"
+              aria-label="Open profile"
+            >
+              <div className="w-8 h-8 rounded-full bg-surface-200 flex items-center justify-center text-surface-600 shrink-0">
+                <User className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-surface-900 truncate">Prototype User</div>
+                <div className="text-xs font-medium text-brand-600 truncate">{role.name}</div>
+              </div>
+            </button>
             <button onClick={clearRole} className="p-1.5 text-surface-400 hover:text-surface-900 transition-colors shrink-0" title="Logout" aria-label="Logout">
               <LogOut className="w-4 h-4" />
             </button>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { IntentLogo } from './IntentLogo'
 import { Loader2, AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, ShieldAlert } from 'lucide-react'
+import { sendResetEmail } from '@/lib/firebase'
 
 interface ForgotPasswordCardProps {
   onBackToLogin: () => void
@@ -12,11 +13,13 @@ export const ForgotPasswordCard: React.FC<ForgotPasswordCardProps> = ({
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [generalError, setGeneralError] = useState<string | null>(null)
   const [isSubmitted, setIsSubmitted] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setEmailError(null)
+    setGeneralError(null)
 
     if (!email.trim()) {
       setEmailError('Please enter your email address.')
@@ -29,12 +32,15 @@ export const ForgotPasswordCard: React.FC<ForgotPasswordCardProps> = ({
     }
 
     setIsLoading(true)
-
-    // Simulate reset link dispatch
-    setTimeout(() => {
-      setIsLoading(false)
-      setIsSubmitted(true)
-    }, 700)
+    sendResetEmail(email.trim())
+      .then(() => {
+        setIsLoading(false)
+        setIsSubmitted(true)
+      })
+      .catch((error) => {
+        setIsLoading(false)
+        setGeneralError(error instanceof Error ? error.message : 'Unable to send the reset link. Please try again.')
+      })
   }
 
   return (
@@ -112,6 +118,12 @@ export const ForgotPasswordCard: React.FC<ForgotPasswordCardProps> = ({
               </p>
             )}
           </div>
+
+          {generalError && (
+            <p role="alert" className="text-sm font-medium text-red-600 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {generalError}
+            </p>
+          )}
 
           {/* Security Note */}
           <div className="p-3 rounded-xl bg-surface-50 border border-surface-200 text-xs text-surface-600 flex items-center gap-2">

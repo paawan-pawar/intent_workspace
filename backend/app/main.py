@@ -11,6 +11,7 @@ from app.api.preferences import router as preferences_router
 from app.api.calendar import router as calendar_router
 from app.api.connections import router as connections_router
 from app.api.meetings import router as meetings_router
+from app.api.gmail import router as gmail_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,6 +50,7 @@ app.include_router(preferences_router, prefix="/api")
 app.include_router(calendar_router, prefix="/api")
 app.include_router(connections_router, prefix="/api")
 app.include_router(meetings_router, prefix="/api")
+app.include_router(gmail_router, prefix="/api")
 
 @app.get("/")
 async def root():
