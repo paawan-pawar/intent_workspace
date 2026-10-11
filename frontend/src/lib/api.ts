@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { z } from 'zod'
+import { SHEET_DASHBOARD_WIDGET_TYPES, type SheetAnalysis, type SheetAnalysisFilters, type SheetCreateRequest, type SheetDashboardWidgetData, type SheetDashboardWidgetType, type SheetRecord } from '@/lib/sheets'
 
 // Create a configured axios instance
 export const api = axios.create({
@@ -48,10 +49,168 @@ export const DashboardPlanSchema = z.object({
   title: z.string(),
   explanation: z.string(),
   clarificationQuestion: z.string().nullable().optional(),
+  theme: z.string().optional(),
   widgets: z.array(WidgetSchema)
 })
 
 export type DashboardPlan = z.infer<typeof DashboardPlanSchema>
+
+const SheetColumnSchema = z.object({
+  name: z.string(),
+  type: z.enum(['text', 'number', 'date', 'boolean', 'category']),
+})
+
+const SheetDashboardPlanSchema = z.object({
+  role: z.string(),
+  title: z.string(),
+  explanation: z.string(),
+  clarificationQuestion: z.string().nullable().optional(),
+  theme: z.string().optional(),
+  task_suggestions: z.array(z.object({
+    title: z.string(),
+    reason: z.string(),
+    priority: z.enum(['high', 'medium', 'low']),
+    due_date_suggestion: z.string().nullable(),
+    metric: z.string().nullable(),
+  })).default([]),
+  discussion_points: z.array(z.string()).default([]),
+  widgets: z.array(z.object({
+    id: z.string(),
+    type: z.enum(SHEET_DASHBOARD_WIDGET_TYPES),
+    title: z.string(),
+    span: z.number().int().min(1).max(4),
+    order: z.number().int(),
+    visible: z.boolean(),
+    data: z.record(z.unknown()),
+    reason: z.string(),
+    actions: z.array(z.string()),
+    is_ai_suggested: z.boolean().nullable().optional(),
+  })),
+})
+
+export const SheetDashboardWidgetDataSchema = z.object({
+  source_sheet_id: z.string(),
+  source_sheet: z.string(),
+  source: z.string(),
+  date_range: z.object({ start: z.string(), end: z.string() }).nullable(),
+  date_range_label: z.string(),
+  row_count: z.number(),
+  data_source_label: z.literal('From sheet'),
+  ai_insight: z.boolean(),
+  columns: z.array(SheetColumnSchema),
+  rows: z.array(z.record(z.union([z.string(), z.number(), z.boolean(), z.null()]))),
+  metrics: z.record(z.object({
+    count: z.number(),
+    total: z.number(),
+    average: z.number().nullable(),
+    minimum: z.number().nullable(),
+    maximum: z.number().nullable(),
+  })),
+  time_series: z.object({
+    date_column: z.string().nullable(),
+    period: z.string(),
+    metrics: z.array(z.string()),
+    series: z.array(z.record(z.union([z.string(), z.number(), z.null()]))),
+    trends: z.record(z.object({
+      direction: z.string(),
+      change: z.number().nullable(),
+      change_pct: z.number().nullable(),
+    })).optional(),
+  }),
+  category_breakdown: z.record(z.array(z.object({ category: z.string(), count: z.number() }))),
+  anomalies: z.array(z.object({
+    type: z.string(),
+    severity: z.string(),
+    column: z.string().optional(),
+    value: z.number().optional(),
+    message: z.string(),
+  })),
+  main_insight: z.string(),
+  uncertainty_warning: z.string(),
+  recommended_actions: z.array(z.string()),
+  relevant_goals: z.array(z.string()),
+})
+
+const SheetDashboardWidgetSchema = WidgetSchema.extend({
+  type: z.enum(SHEET_DASHBOARD_WIDGET_TYPES),
+  data: SheetDashboardWidgetDataSchema,
+})
+
+const SheetAnalysisSchema = z.object({
+  engine: z.enum(['ai', 'statistics']),
+  theme: z.string().default('indigo'),
+  sheet_metadata: z.object({
+    id: z.string(),
+    name: z.string(),
+    source: z.enum(['google_sheets', 'excel_upload', 'csv_upload']),
+    updated_at: z.string(),
+    row_count: z.number(),
+    column_count: z.number(),
+  }),
+  summary: z.object({
+    row_count: z.number(),
+    column_count: z.number(),
+    date_range: z.object({ start: z.string(), end: z.string() }).nullable(),
+    missing_values: z.number(),
+  }),
+  detected_columns: z.array(SheetColumnSchema),
+  key_metrics: z.object({
+    row_count: z.number(),
+    column_count: z.number(),
+    missing_values: z.number(),
+    numeric: z.record(z.object({
+      count: z.number(),
+      total: z.number(),
+      average: z.number().nullable(),
+      minimum: z.number().nullable(),
+      maximum: z.number().nullable(),
+    })),
+  }),
+  time_series: z.object({
+    date_column: z.string().nullable(),
+    period: z.string(),
+    metrics: z.array(z.string()),
+    series: z.array(z.record(z.union([z.string(), z.number(), z.null()]))),
+    trends: z.record(z.object({
+      direction: z.string(),
+      change: z.number().nullable(),
+      change_pct: z.number().nullable(),
+    })).optional(),
+  }),
+  category_breakdown: z.record(z.array(z.object({ category: z.string(), count: z.number() }))),
+  anomalies: z.array(z.object({
+    type: z.string(),
+    severity: z.string(),
+    column: z.string().optional(),
+    value: z.number().optional(),
+    message: z.string(),
+  })),
+  dataset_summary: z.record(z.unknown()),
+  dashboard_plan: SheetDashboardPlanSchema.nullable(),
+  ai_summary: z.string().nullable(),
+  ai_insights: z.array(z.string()),
+  created_at: z.string(),
+}).passthrough()
+
+const SheetRecordSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  source: z.enum(['google_sheets', 'excel_upload', 'csv_upload']),
+  file_name: z.string().nullable(),
+  file_size: z.number(),
+  updated_at: z.string(),
+  row_count: z.number(),
+  column_count: z.number(),
+  columns: z.array(SheetColumnSchema),
+  rows: z.array(z.record(z.union([z.string(), z.number(), z.boolean(), z.null()]))),
+  status: z.enum(['not_analyzed', 'analyzing', 'analyzed', 'error']),
+  analysis: SheetAnalysisSchema.nullable(),
+})
+
+export type { SheetAnalysis, SheetCreateRequest, SheetRecord }
+export type SheetDashboardWidget = z.infer<typeof SheetDashboardWidgetSchema>
+export type SheetDashboardWidgetPayload = SheetDashboardWidgetData
+export type SheetDashboardWidgetKind = SheetDashboardWidgetType
 
 export interface PromptRequest {
   prompt: string
@@ -183,8 +342,81 @@ export const NoteSchema = z.object({
   date: z.string(),
   tag: z.string(),
   color: z.string(),
+  content: z.string().optional(),
+  sheet_id: z.string().optional(),
+  sheet_name: z.string().optional(),
+  source_url: z.string().optional(),
+  ai_suggested: z.boolean().optional(),
 })
 export type NoteModel = z.infer<typeof NoteSchema>
+
+export const SheetLinkedTaskSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  reason: z.string(),
+  priority: z.enum(['high', 'medium', 'low']),
+  due_date: z.string().nullable(),
+  status: z.enum(['todo', 'in-progress', 'done']),
+  sheet_id: z.string(),
+  sheet_name: z.string(),
+  metric: z.string().nullable(),
+  ai_suggested: z.boolean(),
+  created_at: z.string(),
+  source_url: z.string(),
+})
+export type SheetLinkedTask = z.infer<typeof SheetLinkedTaskSchema>
+
+export const SheetGoalSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  target_value: z.number(),
+  current_value: z.number(),
+  baseline_value: z.number(),
+  remaining_gap: z.number(),
+  progress_percent: z.number(),
+  deadline: z.string(),
+  direction: z.enum(['increase', 'reduce']),
+  sheet_id: z.string(),
+  sheet_name: z.string(),
+  metric: z.string(),
+  source_url: z.string(),
+  updated_at: z.string(),
+})
+export type SheetGoal = z.infer<typeof SheetGoalSchema>
+
+export const CalendarSheetAttachmentSchema = z.object({
+  sheet_id: z.string(),
+  sheet_name: z.string(),
+  source_url: z.string(),
+  date_range: z.object({ start: z.string(), end: z.string() }).nullable(),
+  metrics: z.record(z.object({
+    count: z.number(),
+    total: z.number(),
+    average: z.number().nullable(),
+    minimum: z.number().nullable(),
+    maximum: z.number().nullable(),
+  })),
+  trend: z.object({
+    date_column: z.string().nullable(),
+    period: z.string(),
+    metrics: z.array(z.string()),
+    series: z.array(z.record(z.union([z.string(), z.number(), z.null()]))),
+    trends: z.record(z.object({
+      direction: z.string(),
+      change: z.number().nullable(),
+      change_pct: z.number().nullable(),
+    })).optional(),
+  }),
+  risks: z.array(z.object({
+    type: z.string(),
+    severity: z.string(),
+    message: z.string(),
+  }).passthrough()),
+  discussion_points: z.array(z.string()),
+  ai_insight: z.string(),
+  calculation_basis: z.string(),
+})
+export type CalendarSheetAttachment = z.infer<typeof CalendarSheetAttachmentSchema>
 
 
 export const PreferencesSchema = z.object({
@@ -313,6 +545,96 @@ export const apiService = {
   async putPreferences(role: string, prefs: Preferences): Promise<Preferences> {
     const { data } = await api.put(`/preferences/${role}`, prefs)
     return PreferencesSchema.parse(data)
+  },
+  async getSheets(): Promise<SheetRecord[]> {
+    const { data } = await api.get('/sheets')
+    return z.array(SheetRecordSchema).parse(data)
+  },
+  async getSheet(id: string): Promise<SheetRecord> {
+    const { data } = await api.get(`/sheets/${encodeURIComponent(id)}`)
+    return SheetRecordSchema.parse(data)
+  },
+  async createSheet(sheet: SheetCreateRequest, onUploadProgress?: (progress: number) => void): Promise<SheetRecord> {
+    const { data } = await api.post('/sheets/upload', sheet, {
+      onUploadProgress: event => {
+        if (event.total) onUploadProgress?.(Math.round((event.loaded / event.total) * 100))
+      },
+    })
+    return SheetRecordSchema.parse(data)
+  },
+  async connectDemoSheets(): Promise<{ sheets: SheetRecord[]; demo_mode: boolean }> {
+    const { data } = await api.post('/sheets/demo-connect')
+    return {
+      sheets: z.array(SheetRecordSchema).parse(data.sheets),
+      demo_mode: z.boolean().parse(data.demo_mode),
+    }
+  },
+  async deleteSheet(id: string): Promise<void> {
+    await api.delete(`/sheets/${encodeURIComponent(id)}`)
+  },
+  async analyzeSheet(id: string, filters: SheetAnalysisFilters = {}): Promise<SheetAnalysis> {
+    const { data } = await api.post(`/sheets/${encodeURIComponent(id)}/analyze`, filters)
+    return SheetAnalysisSchema.parse(data)
+  },
+  async addSheetToDashboard(id: string, role: string): Promise<{ role: string; widgets: SheetDashboardWidget[]; aiInsightsAvailable: boolean }> {
+    const { data } = await api.post(`/sheets/${encodeURIComponent(id)}/add-to-dashboard`, { role })
+    return {
+      role: z.string().parse(data.role),
+      widgets: z.array(SheetDashboardWidgetSchema).parse(data.widgets),
+      aiInsightsAvailable: z.boolean().parse(data.ai_insights_available),
+    }
+  },
+  async getSheetTasks(): Promise<SheetLinkedTask[]> {
+    const { data } = await api.get('/sheet-links/tasks')
+    return z.array(SheetLinkedTaskSchema).parse(data)
+  },
+  async createSheetTask(sheetId: string, task: Pick<SheetLinkedTask, 'title' | 'reason' | 'priority' | 'due_date' | 'metric'>): Promise<SheetLinkedTask> {
+    const { data } = await api.post(`/sheet-links/sheets/${encodeURIComponent(sheetId)}/tasks`, task)
+    return SheetLinkedTaskSchema.parse(data)
+  },
+  async updateSheetTask(taskId: number, status: SheetLinkedTask['status']): Promise<SheetLinkedTask> {
+    const { data } = await api.patch(`/sheet-links/tasks/${taskId}`, { status })
+    return SheetLinkedTaskSchema.parse(data)
+  },
+  async getSheetNotes(): Promise<NoteModel[]> {
+    const { data } = await api.get('/sheet-links/notes')
+    return z.array(NoteSchema).parse(data)
+  },
+  async createSheetNote(sheetId: string): Promise<NoteModel> {
+    const { data } = await api.post(`/sheet-links/sheets/${encodeURIComponent(sheetId)}/notes`)
+    return NoteSchema.parse(data)
+  },
+  async getSheetGoals(): Promise<SheetGoal[]> {
+    const { data } = await api.get('/sheet-links/goals')
+    return z.array(SheetGoalSchema).parse(data)
+  },
+  async createSheetGoal(sheetId: string, goal: {
+    title: string
+    target_value: number
+    deadline: string
+    metric: string
+    direction: 'increase' | 'reduce'
+  }): Promise<SheetGoal> {
+    const { data } = await api.post(`/sheet-links/sheets/${encodeURIComponent(sheetId)}/goals`, goal)
+    return SheetGoalSchema.parse(data)
+  },
+  async refreshSheetGoal(goalId: number): Promise<SheetGoal> {
+    const { data } = await api.post(`/sheet-links/goals/${goalId}/refresh`)
+    return SheetGoalSchema.parse(data)
+  },
+  async attachSheetToCalendarEvent(sheetId: string, eventId: number): Promise<{ event_id: number; event_title: string; sheet_id: string; sheet_name: string; source_url: string }> {
+    const { data } = await api.post(`/sheet-links/sheets/${encodeURIComponent(sheetId)}/calendar-attachments`, { event_id: eventId })
+    return z.object({
+      event_id: z.number(),
+      event_title: z.string(),
+      sheet_id: z.string(),
+      sheet_name: z.string(),
+      source_url: z.string(),
+    }).parse(data)
+  },
+  async getCalendarSheetAttachments(eventId: number): Promise<CalendarSheetAttachment[]> {
+    const { data } = await api.get(`/sheet-links/calendar/events/${eventId}/sheets`)
+    return z.array(CalendarSheetAttachmentSchema).parse(data)
   },
 
   /**

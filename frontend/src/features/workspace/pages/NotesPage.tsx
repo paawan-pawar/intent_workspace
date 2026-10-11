@@ -1,6 +1,8 @@
-import { Search, Plus, FileText, MoreHorizontal } from 'lucide-react'
-import { NoteModel } from '@/lib/api'
-import { useState } from 'react'
+import { Search, Plus, FileText, MoreHorizontal, ExternalLink, Sparkles } from 'lucide-react'
+import { apiService, NoteModel } from '@/lib/api'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useToast } from '@/app/providers/ToastProvider'
 
 const INITIAL_NOTES: NoteModel[] = [
   { id: 1, title: "Product Roadmap Q4", preview: "Focus on user retention and onboarding flow improvements. Goal is to reduce drop-off by 15%...", date: "Oct 11", tag: "Strategy", color: "border-brand-200 bg-brand-50/50" },
@@ -10,9 +12,17 @@ const INITIAL_NOTES: NoteModel[] = [
 ]
 
 export function NotesPage() {
+  const navigate = useNavigate()
+  const { showToast } = useToast()
   const [notes, setNotes] = useState<NoteModel[]>(INITIAL_NOTES)
   const [isAdding, setIsAdding] = useState(false)
   const [newNoteTitle, setNewNoteTitle] = useState('')
+
+  useEffect(() => {
+    void apiService.getSheetNotes()
+      .then(sheetNotes => setNotes(current => [...sheetNotes, ...current.filter(note => !sheetNotes.some(item => item.id === note.id))]))
+      .catch(error => showToast(error instanceof Error ? error.message : 'Sheet insight notes could not be loaded.'))
+  }, [])
 
   const handleAddNote = (e: React.FormEvent) => {
     e.preventDefault()
@@ -68,17 +78,25 @@ export function NotesPage() {
         {notes.map(note => (
           <div key={note.id} className={`group p-5 rounded-2xl border cursor-pointer hover:shadow-md transition-all h-64 flex flex-col ${note.color}`}>
             <div className="flex justify-between items-start mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider opacity-60">{note.tag}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider opacity-60">{note.tag}</span>
+                {note.ai_suggested && <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-100 px-2 py-0.5 text-[9px] font-bold text-violet-900"><Sparkles className="h-3 w-3" /> AI insight</span>}
+              </div>
               <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/50 rounded-md">
                 <MoreHorizontal className="w-4 h-4 text-surface-600" />
               </button>
             </div>
             <h3 className="text-lg font-bold text-surface-900 mb-2 line-clamp-2">{note.title}</h3>
-            <p className="text-sm text-surface-600 flex-1 whitespace-pre-wrap line-clamp-5">{note.preview}</p>
+            <p className="text-sm text-surface-600 flex-1 whitespace-pre-wrap line-clamp-5">{note.content ?? note.preview}</p>
             <div className="mt-4 pt-4 border-t border-black/5 flex items-center justify-between text-xs font-medium text-surface-500">
               <span className="flex items-center gap-1"><FileText className="w-3 h-3" /> Document</span>
               <span>{note.date}</span>
             </div>
+            {note.source_url && (
+              <button type="button" onClick={() => navigate(note.source_url!)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-cyan-800 hover:underline">
+                Open source sheet <ExternalLink className="h-3 w-3" aria-hidden="true" />
+              </button>
+            )}
           </div>
         ))}
         

@@ -22,6 +22,7 @@ class DashboardPlan(BaseModel):
     title: str
     explanation: str
     clarificationQuestion: Optional[str] = None
+    theme: str = "indigo"
     widgets: List[Widget]
 
 @router.get("/dashboard/{role}", response_model=DashboardPlan)

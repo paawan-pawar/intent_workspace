@@ -1,10 +1,14 @@
 import React, { useState } from 'react'
-import { Info, Pin, EyeOff, Clock, MessageSquare, CheckSquare, User, CalendarPlus, ChevronUp, ChevronDown, Maximize2, Minimize2, Sparkles, Sun, ArrowUpRight, ArrowDownRight, AlertTriangle, GitPullRequest, BarChart3, ShieldAlert, DollarSign } from 'lucide-react'
+import { Info, Pin, EyeOff, Clock, MessageSquare, CheckSquare, User, CalendarPlus, ChevronUp, ChevronDown, Maximize2, Minimize2, Sparkles, Sun, ArrowUpRight, ArrowDownRight, AlertTriangle, GitPullRequest, BarChart3, ShieldAlert, DollarSign, Mail, FileText } from 'lucide-react'
 import { WidgetModel, ScheduleMeetingRequest } from '@/lib/api'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/app/providers/ToastProvider'
+import { SHEET_DASHBOARD_WIDGET_TYPES } from '@/lib/sheets'
+import { SheetDrivenWidget } from '@/features/workspace/components/SheetDrivenWidget'
+
+const sheetWidgetTypes: readonly string[] = SHEET_DASHBOARD_WIDGET_TYPES
 
 interface WidgetRendererProps {
   widget: WidgetModel
@@ -14,14 +18,181 @@ interface WidgetRendererProps {
   onMoveUp: (id: string) => void
   onMoveDown: (id: string) => void
   onResize: (id: string) => void
+  onRemoveSheetWidget: (id: string) => void
   onScheduleMeeting?: (req: Omit<ScheduleMeetingRequest, 'currentPlan'>) => Promise<void>
 }
 
-export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp, onMoveDown, onResize, onScheduleMeeting }: WidgetRendererProps) {
+interface WidgetPresentation {
+  border: string
+  header: string
+  background: string
+  iconBackground: string
+  iconColor: string
+  icon: React.ReactNode
+}
+
+function getWidgetPresentation(widget: WidgetModel): WidgetPresentation {
+  if (widget.is_ai_suggested || ['daily_briefing', 'meeting_summary', 'meeting_notes'].includes(widget.type)) {
+    return {
+      border: 'border-l-violet-500',
+      header: 'bg-gradient-to-r from-violet-50 to-white border-b border-violet-100',
+      background: 'bg-gradient-to-b from-violet-50/40 via-white to-white',
+      iconBackground: 'bg-violet-100',
+      iconColor: 'text-violet-700',
+      icon: <Sparkles className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (widget.type === 'revenue_trend') {
+    return {
+      border: 'border-l-indigo-500',
+      header: 'bg-gradient-to-r from-indigo-50 to-white border-b border-indigo-100',
+      background: 'bg-gradient-to-b from-indigo-50/40 via-white to-white',
+      iconBackground: 'bg-indigo-100',
+      iconColor: 'text-indigo-700',
+      icon: <BarChart3 className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (['kpi_cards', 'category_breakdown', 'data_table'].includes(widget.type)) {
+    return {
+      border: 'border-l-cyan-500',
+      header: 'bg-gradient-to-r from-cyan-50 to-white border-b border-cyan-100',
+      background: 'bg-gradient-to-b from-cyan-50/40 via-white to-white',
+      iconBackground: 'bg-cyan-100',
+      iconColor: 'text-cyan-800',
+      icon: <BarChart3 className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (widget.type === 'anomaly_alerts') {
+    return {
+      border: 'border-l-rose-500',
+      header: 'bg-gradient-to-r from-rose-50 to-white border-b border-rose-100',
+      background: 'bg-gradient-to-b from-rose-50/40 via-white to-white',
+      iconBackground: 'bg-rose-100',
+      iconColor: 'text-rose-800',
+      icon: <AlertTriangle className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (sheetWidgetTypes.includes(widget.type)) {
+    return {
+      border: 'border-l-violet-500',
+      header: 'bg-gradient-to-r from-violet-50 to-white border-b border-violet-100',
+      background: 'bg-gradient-to-b from-violet-50/40 via-white to-white',
+      iconBackground: 'bg-violet-100',
+      iconColor: 'text-violet-700',
+      icon: <Sparkles className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (['calendar', 'patient_schedule', 'meeting_scheduler'].includes(widget.type)) {
+    return {
+      border: 'border-l-indigo-500',
+      header: 'bg-gradient-to-r from-indigo-50 to-white border-b border-indigo-100',
+      background: 'bg-gradient-to-b from-indigo-50/40 via-white to-white',
+      iconBackground: 'bg-indigo-100',
+      iconColor: 'text-indigo-700',
+      icon: <CalendarPlus className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (widget.type === 'messages') {
+    return {
+      border: 'border-l-cyan-500',
+      header: 'bg-gradient-to-r from-cyan-50 to-white border-b border-cyan-100',
+      background: 'bg-gradient-to-b from-cyan-50/40 via-white to-white',
+      iconBackground: 'bg-cyan-100',
+      iconColor: 'text-cyan-800',
+      icon: <Mail className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (['tasks', 'lab_results', 'pull_requests'].includes(widget.type)) {
+    return {
+      border: 'border-l-emerald-500',
+      header: 'bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-100',
+      background: 'bg-gradient-to-b from-emerald-50/40 via-white to-white',
+      iconBackground: 'bg-emerald-100',
+      iconColor: 'text-emerald-800',
+      icon: widget.type === 'pull_requests'
+        ? <GitPullRequest className="h-4 w-4" aria-hidden="true" />
+        : <CheckSquare className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (widget.type === 'incidents') {
+    return {
+      border: 'border-l-rose-500',
+      header: 'bg-gradient-to-r from-rose-50 to-white border-b border-rose-100',
+      background: 'bg-gradient-to-b from-rose-50/40 via-white to-white',
+      iconBackground: 'bg-rose-100',
+      iconColor: 'text-rose-800',
+      icon: <AlertTriangle className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (widget.type === 'risk_alerts') {
+    return {
+      border: 'border-l-amber-500',
+      header: 'bg-gradient-to-r from-amber-50 to-white border-b border-amber-100',
+      background: 'bg-gradient-to-b from-amber-50/40 via-white to-white',
+      iconBackground: 'bg-amber-100',
+      iconColor: 'text-amber-800',
+      icon: <ShieldAlert className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  if (['sprint_board', 'market_watch', 'portfolio'].includes(widget.type)) {
+    return {
+      border: 'border-l-cyan-500',
+      header: 'bg-gradient-to-r from-cyan-50 to-white border-b border-cyan-100',
+      background: 'bg-gradient-to-b from-cyan-50/40 via-white to-white',
+      iconBackground: 'bg-cyan-100',
+      iconColor: 'text-cyan-800',
+      icon: widget.type === 'portfolio'
+        ? <DollarSign className="h-4 w-4" aria-hidden="true" />
+        : <BarChart3 className="h-4 w-4" aria-hidden="true" />,
+    }
+  }
+
+  return {
+    border: 'border-l-indigo-500',
+    header: 'bg-gradient-to-r from-indigo-50 to-white border-b border-indigo-100',
+    background: 'bg-gradient-to-b from-indigo-50/40 via-white to-white',
+    iconBackground: 'bg-indigo-100',
+    iconColor: 'text-indigo-700',
+    icon: <FileText className="h-4 w-4" aria-hidden="true" />,
+  }
+}
+
+function isOverdueTask(dueDate: string | undefined): boolean {
+  if (!dueDate) return false
+  if (['yesterday', 'overdue'].includes(dueDate.trim().toLowerCase())) return true
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueDate)
+  if (!match) return false
+
+  const due = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return due < today
+}
+
+export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp, onMoveDown, onResize, onRemoveSheetWidget, onScheduleMeeting, theme }: WidgetRendererProps & { theme?: string }) {
   const [showReason, setShowReason] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { showToast } = useToast()
+  const presentation = getWidgetPresentation(widget)
+  const renderEmptyState = (icon: React.ReactNode, message: string) => (
+    <EmptyState
+      icon={icon}
+      message={message}
+      iconClassName={cn(presentation.iconBackground, presentation.iconColor)}
+    />
+  )
 
   // Scheduler Form State
   const [title, setTitle] = useState("Q4 Planning Sync")
@@ -123,7 +294,7 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
       case 'calendar':
       case 'patient_schedule':
         const events = widget.data.events || widget.data.patients || []
-        if (!events.length) return <EmptyState icon={<Clock />} message="No upcoming events. Your schedule is clear." />
+        if (!events.length) return renderEmptyState(<Clock />, "No upcoming events. Your schedule is clear.")
         return (
           <ul className="space-y-4">
             {events.map((ev: any, i: number) => (
@@ -150,7 +321,7 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
 
       case 'messages':
         const messages = widget.data.messages || []
-        if (!messages.length) return <EmptyState icon={<MessageSquare />} message="Inbox zero! You're all caught up." />
+        if (!messages.length) return renderEmptyState(<MessageSquare />, "Inbox zero! You're all caught up.")
         return (
           <div className="space-y-3">
             {messages.map((msg: any, i: number) => (
@@ -171,30 +342,40 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
 
       case 'tasks':
         const tasks = widget.data.tasks || []
-        if (!tasks.length) return <EmptyState icon={<CheckSquare />} message="No pending tasks." />
+        if (!tasks.length) return renderEmptyState(<CheckSquare />, "No pending tasks.")
         return (
           <div className="space-y-2.5">
-            {tasks.map((task: any, i: number) => (
-              <label key={i} className="flex items-start gap-3 p-3 bg-white border border-surface-200 rounded-xl hover:border-surface-300 transition-colors cursor-pointer focus-within:ring-2 focus-within:ring-brand-500/20">
-                <input type="checkbox" defaultChecked={task.completed} className="mt-0.5 w-5 h-5 rounded border-surface-300 text-brand-600 focus:ring-brand-500 cursor-pointer" />
-                <div className="flex-1 min-w-0">
-                  <div className={cn("text-sm font-semibold truncate", task.completed ? "text-surface-400 line-through" : "text-surface-900")}>{task.title}</div>
-                  <div className="flex gap-2 text-xs font-medium text-surface-500 mt-1.5">
-                    <span className="px-1.5 py-0.5 rounded bg-surface-100 border border-surface-200">{task.due_date}</span>
-                    <span className={cn(
-                      "px-1.5 py-0.5 rounded border",
-                      task.priority === "High" ? "bg-danger/10 text-danger border-danger/20" : "bg-surface-100 text-surface-600 border-surface-200"
-                    )}>{task.priority} Priority</span>
+            {tasks.map((task: any, i: number) => {
+              const overdue = !task.completed && isOverdueTask(task.due_date)
+              const status = task.completed ? 'Completed' : overdue ? 'Overdue' : 'Pending'
+              return (
+                <label key={i} className="flex items-start gap-3 p-3 bg-white border border-emerald-100 rounded-xl hover:border-emerald-200 transition-colors cursor-pointer focus-within:ring-2 focus-within:ring-emerald-500/20">
+                  <input type="checkbox" defaultChecked={task.completed} className="mt-0.5 w-5 h-5 rounded border-surface-300 accent-emerald-600 focus:ring-emerald-500 cursor-pointer" />
+                  <div className="flex-1 min-w-0">
+                    <div className={cn("text-sm font-semibold truncate", task.completed ? "text-surface-400 line-through" : "text-surface-900")}>{task.title}</div>
+                    <div className="flex flex-wrap gap-2 text-xs font-medium mt-1.5">
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded-full border font-semibold",
+                        task.completed ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : overdue ? "bg-rose-50 text-rose-800 border-rose-200"
+                          : "bg-amber-50 text-amber-800 border-amber-200"
+                      )}>{status}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-surface-50 text-surface-600 border border-surface-200">{task.due_date}</span>
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded-full border",
+                        task.priority === "High" ? "bg-rose-50 text-rose-800 border-rose-200" : "bg-surface-50 text-surface-600 border-surface-200"
+                      )}>{task.priority} Priority</span>
+                    </div>
                   </div>
-                </div>
-              </label>
-            ))}
+                </label>
+              )
+            })}
           </div>
         )
 
       case 'meeting_summary':
         const summary = widget.data.summary
-        if (!summary) return <EmptyState icon={<MessageSquare />} message="No recent meetings." />
+        if (!summary) return renderEmptyState(<MessageSquare />, "No recent meetings.")
         return (
           <div className="flex flex-col space-y-5">
             {summary.title && <div className="text-lg font-bold text-surface-900">{summary.title}</div>}
@@ -288,7 +469,7 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
           { key: 'review', label: 'Review' },
           { key: 'done', label: 'Done' },
         ]
-        if (!sprint) return <EmptyState icon={<BarChart3 />} message="No active sprint data." />
+        if (!sprint) return renderEmptyState(<BarChart3 />, "No active sprint data.")
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -296,14 +477,20 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
                 <p className="text-lg font-bold text-surface-900">{sprint.name}</p>
                 <p className="text-sm text-surface-500">{sprint.days_left} days remaining</p>
               </div>
-              <span className="text-2xl font-bold text-brand-600">{sprint.progress}%</span>
+              <span className="text-2xl font-bold text-cyan-800">{sprint.progress}%</span>
             </div>
             <div className="h-2 rounded-full bg-surface-100 overflow-hidden">
-              <div className="h-full rounded-full bg-brand-500" style={{ width: `${sprint.progress}%` }} />
+              <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500" style={{ width: `${sprint.progress}%` }} />
             </div>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
-              {ticketColumns.map(column => (
-                <div key={column.key} className="rounded-lg bg-surface-50 border border-surface-200 p-2">
+              {ticketColumns.map((column, index) => (
+                <div key={column.key} className={cn(
+                  "rounded-lg border p-2",
+                  index === 0 ? "bg-amber-50/70 border-amber-200"
+                    : index === 1 ? "bg-indigo-50/70 border-indigo-200"
+                    : index === 2 ? "bg-violet-50/70 border-violet-200"
+                    : "bg-emerald-50/70 border-emerald-200"
+                )}>
                   <div className="flex justify-between text-xs font-bold text-surface-500 mb-2">
                     <span>{column.label}</span><span>{columns[column.key]?.length ?? 0}</span>
                   </div>
@@ -324,7 +511,7 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
 
       case 'incidents': {
         const incidents = widget.data.incidents ?? []
-        if (!incidents.length) return <EmptyState icon={<AlertTriangle />} message="No active incidents." />
+        if (!incidents.length) return renderEmptyState(<AlertTriangle />, "No active incidents.")
         return (
           <div className="space-y-3">
             {incidents.map((incident: any) => (
@@ -333,7 +520,9 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-bold text-surface-900 truncate">{incident.title}</p>
-                    <span className="text-[11px] font-bold uppercase text-danger">{incident.severity}</span>
+                    <span className="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-800">
+                      At risk · {incident.severity}
+                    </span>
                   </div>
                   <p className="text-sm text-surface-600 mt-1">{incident.status} · Started {incident.started}</p>
                 </div>
@@ -345,7 +534,7 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
 
       case 'pull_requests': {
         const pullRequests = widget.data.prs ?? []
-        if (!pullRequests.length) return <EmptyState icon={<GitPullRequest />} message="No pull requests waiting." />
+        if (!pullRequests.length) return renderEmptyState(<GitPullRequest />, "No pull requests waiting.")
         return (
           <div className="space-y-2.5">
             {pullRequests.map((pullRequest: any) => (
@@ -355,8 +544,13 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
                   <p className="font-semibold text-surface-900 truncate">{pullRequest.title}</p>
                   <p className="text-xs text-surface-500 mt-1">{pullRequest.id} · {pullRequest.author} · {pullRequest.comments} comments</p>
                 </div>
-                <span className={cn("text-[11px] font-bold uppercase", pullRequest.status === 'approved' ? "text-success-dark" : "text-warning-dark")}>
-                  {pullRequest.status.replace('_', ' ')}
+                <span className={cn(
+                  "rounded-full border px-2 py-0.5 text-[11px] font-bold",
+                  pullRequest.status === 'approved'
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-amber-200 bg-amber-50 text-amber-800"
+                )}>
+                  {pullRequest.status === 'approved' ? 'Completed' : 'Pending review'}
                 </span>
               </div>
             ))}
@@ -366,7 +560,7 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
 
       case 'lab_results': {
         const results = widget.data.results ?? []
-        if (!results.length) return <EmptyState icon={<CheckSquare />} message="No lab results to review." />
+        if (!results.length) return renderEmptyState(<CheckSquare />, "No lab results to review.")
         return (
           <div className="space-y-2.5">
             {results.map((result: any) => (
@@ -386,19 +580,25 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
 
       case 'market_watch': {
         const indices = widget.data.indices ?? []
-        if (!indices.length) return <EmptyState icon={<BarChart3 />} message="No market data available." />
+        if (!indices.length) return renderEmptyState(<BarChart3 />, "No market data available.")
         return (
           <div className="grid grid-cols-2 gap-3">
             {indices.map((index: any) => {
               const isPositive = index.trend === 'up'
               return (
-                <div key={index.symbol} className="rounded-xl border border-surface-200 bg-white p-3">
+                <div key={index.symbol} className={cn(
+                  "rounded-xl border p-3",
+                  isPositive ? "border-emerald-200 bg-emerald-50/60" : "border-rose-200 bg-rose-50/60"
+                )}>
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-surface-900">{index.symbol}</span>
                     {isPositive ? <ArrowUpRight className="w-4 h-4 text-success" /> : <ArrowDownRight className="w-4 h-4 text-danger" />}
                   </div>
                   <p className="text-lg font-bold text-surface-900 mt-2">{index.price}</p>
-                  <p className={cn("text-xs font-bold mt-1", isPositive ? "text-success-dark" : "text-danger")}>{index.change}</p>
+                  <p className={cn(
+                    "mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-bold",
+                    isPositive ? "border-emerald-200 bg-white/80 text-emerald-800" : "border-rose-200 bg-white/80 text-rose-800"
+                  )}>{index.change}</p>
                 </div>
               )
             })}
@@ -408,7 +608,7 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
 
       case 'portfolio': {
         const portfolio = widget.data.portfolio
-        if (!portfolio) return <EmptyState icon={<DollarSign />} message="No portfolio data available." />
+        if (!portfolio) return renderEmptyState(<DollarSign />, "No portfolio data available.")
         return (
           <div className="space-y-4">
             <div className="flex items-end justify-between">
@@ -425,7 +625,7 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
               {(portfolio.holdings ?? []).map((holding: any) => (
                 <div key={holding.asset} className="flex items-center gap-3 text-sm">
                   <span className="w-12 font-bold text-surface-800">{holding.asset}</span>
-                  <div className="h-2 flex-1 rounded-full bg-surface-100 overflow-hidden"><div className="h-full rounded-full bg-brand-400" style={{ width: holding.weight }} /></div>
+                  <div className="h-2 flex-1 rounded-full bg-surface-100 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500" style={{ width: holding.weight }} /></div>
                   <span className="w-12 text-right text-surface-500">{holding.weight}</span>
                   <span className={cn("w-12 text-right font-bold", holding.pnl.startsWith('-') ? "text-danger" : "text-success-dark")}>{holding.pnl}</span>
                 </div>
@@ -437,7 +637,7 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
 
       case 'risk_alerts': {
         const alerts = widget.data.alerts ?? []
-        if (!alerts.length) return <EmptyState icon={<ShieldAlert />} message="No active risk alerts." />
+        if (!alerts.length) return renderEmptyState(<ShieldAlert />, "No active risk alerts.")
         return (
           <div className="space-y-3">
             {alerts.map((alert: any) => (
@@ -446,7 +646,9 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-bold text-surface-900">{alert.asset}</p>
-                    <span className="text-[11px] font-bold uppercase text-warning-dark">{alert.level}</span>
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                      At risk · {alert.level}
+                    </span>
                   </div>
                   <p className="text-sm text-surface-600 mt-1">{alert.alert}</p>
                 </div>
@@ -455,6 +657,26 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
           </div>
         )
       }
+
+      case 'sheet_summary':
+      case 'kpi_cards':
+      case 'revenue_trend':
+      case 'category_breakdown':
+      case 'data_table':
+      case 'anomaly_alerts':
+      case 'goal_progress':
+      case 'sheet_task_suggestions':
+        return (
+          <SheetDrivenWidget
+            id={widget.id}
+            type={widget.type}
+            title={widget.title}
+            data={widget.data}
+            reason={widget.reason}
+            theme={theme}
+            onRemove={onRemoveSheetWidget}
+          />
+        )
 
       default:
         return (
@@ -481,6 +703,9 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
     <Card className={cn(
       spanClass, 
       "flex flex-col transition-all duration-300 relative group animate-slide-up overflow-visible",
+      "border-l-4 shadow-sm hover:shadow-md",
+      presentation.border,
+      presentation.background,
       isPinned ? "ring-2 ring-brand-500 ring-offset-2 border-brand-200 shadow-glow" : ""
     )}>
       {showReason && (
@@ -490,11 +715,18 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
         </div>
       )}
       
-      <CardHeader className="flex flex-row items-center justify-between py-3 pb-2 bg-surface-50/50 rounded-t-xl border-b border-surface-100">
+      <CardHeader className={cn("flex flex-row items-center justify-between py-3 pb-2 rounded-t-xl", presentation.header)}>
         <div className="flex items-center gap-2">
+          <span className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl",
+            presentation.iconBackground,
+            presentation.iconColor
+          )}>
+            {presentation.icon}
+          </span>
           {widget.is_ai_suggested && (
-            <div className="bg-brand-100 text-brand-700 text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1" title="AI Suggestion">
-              <Sparkles className="w-3 h-3" /> AI
+            <div className="flex items-center gap-1 rounded-full border border-violet-200 bg-violet-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-800" title="AI insight">
+              <Sparkles className="h-3 w-3" aria-hidden="true" /> AI insight
             </div>
           )}
           <CardTitle className="text-base truncate">{widget.title}</CardTitle>
@@ -547,10 +779,10 @@ export function WidgetRenderer({ widget, isPinned, onTogglePin, onHide, onMoveUp
   )
 }
 
-function EmptyState({ icon, message }: { icon: React.ReactNode, message: string }) {
+function EmptyState({ icon, message, iconClassName }: { icon: React.ReactNode, message: string, iconClassName: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[140px] text-surface-500 bg-surface-50/50 border border-dashed border-surface-200 rounded-xl px-4 text-center">
-      <div className="mb-3 bg-white p-3 rounded-full shadow-sm text-surface-400">{icon}</div>
+      <div className={cn("mb-3 rounded-2xl p-3 shadow-sm", iconClassName)}>{icon}</div>
       <span className="text-sm font-semibold">{message}</span>
     </div>
   )

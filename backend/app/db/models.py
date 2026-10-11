@@ -76,3 +76,73 @@ class GmailConnection(Base):
     last_sync_result = Column(Text, nullable=True)
     # Unread count cache
     unread_count = Column(Integer, default=0)
+
+
+class SheetRecord(Base):
+    __tablename__ = "sheets"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    source = Column(String, nullable=False)
+    file_name = Column(String, nullable=True)
+    file_size = Column(Integer, nullable=False, default=0)
+    updated_at = Column(String, nullable=False)
+    row_count = Column(Integer, nullable=False, default=0)
+    column_count = Column(Integer, nullable=False, default=0)
+    columns = Column(JSON, nullable=False, default=list)
+    rows = Column(JSON, nullable=False, default=list)
+    status = Column(String, nullable=False, default="not_analyzed")
+    analysis = Column(JSON, nullable=True)
+
+
+class SheetSuggestedTask(Base):
+    __tablename__ = "sheet_suggested_tasks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String, nullable=False)
+    reason = Column(Text, nullable=False)
+    priority = Column(String, nullable=False, default="medium")
+    due_date = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="todo")
+    sheet_id = Column(String, nullable=False, index=True)
+    sheet_name = Column(String, nullable=False)
+    metric = Column(String, nullable=True)
+    ai_suggested = Column(Boolean, nullable=False, default=True)
+    created_at = Column(String, nullable=False)
+
+
+class SheetInsightNote(Base):
+    __tablename__ = "sheet_insight_notes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    preview = Column(Text, nullable=False)
+    sheet_id = Column(String, nullable=False, index=True)
+    sheet_name = Column(String, nullable=False)
+    created_at = Column(String, nullable=False)
+
+
+class SheetGoal(Base):
+    __tablename__ = "sheet_goals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String, nullable=False)
+    target_value = Column(Float, nullable=False)
+    current_value = Column(Float, nullable=False)
+    baseline_value = Column(Float, nullable=False)
+    deadline = Column(String, nullable=False)
+    direction = Column(String, nullable=False, default="increase")
+    sheet_id = Column(String, nullable=False, index=True)
+    sheet_name = Column(String, nullable=False)
+    metric = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
+
+
+class CalendarSheetAttachment(Base):
+    __tablename__ = "calendar_sheet_attachments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_id = Column(Integer, nullable=False, index=True)
+    sheet_id = Column(String, nullable=False, index=True)
+    attached_at = Column(String, nullable=False)

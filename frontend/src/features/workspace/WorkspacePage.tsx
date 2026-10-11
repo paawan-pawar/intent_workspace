@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LogOut, LayoutDashboard, RefreshCw, Undo2, HelpCircle, Save, ChevronDown, List, Calendar, Mail, FileText, CheckSquare, Zap, Clock, CalendarPlus, User, Sparkles } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { LogOut, LayoutDashboard, RefreshCw, Undo2, HelpCircle, Save, ChevronDown, List, Calendar, Mail, FileText, CheckSquare, Zap, Clock, CalendarPlus, User, Sparkles, Table2, Target } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useUser } from '@/app/providers/UserProvider'
 import { useToast } from '@/app/providers/ToastProvider'
-import { apiService, DashboardPlan, ScheduleMeetingRequest, Preferences } from '@/lib/api'
+import { apiService, DashboardPlan, ScheduleMeetingRequest, Preferences, WidgetModel } from '@/lib/api'
 import { DashboardGrid } from '@/features/workspace/components/DashboardGrid'
 import { PromptComposer } from '@/features/workspace/components/PromptComposer'
 import { CommandPalette } from '@/features/workspace/components/CommandPalette'
@@ -15,6 +15,9 @@ import { MeetingsPage } from '@/features/workspace/pages/MeetingsPage'
 import { TasksPage } from '@/features/workspace/pages/TasksPage'
 import { NotesPage } from '@/features/workspace/pages/NotesPage'
 import { ConnectionsPage } from '@/features/workspace/pages/ConnectionsPage'
+import { SheetsPage } from '@/features/workspace/pages/SheetsPage'
+import { GoalsPage } from '@/features/workspace/pages/GoalsPage'
+import type { SheetRecord } from '@/lib/sheets'
 import { cn } from '@/lib/utils'
 
 export function WorkspacePage() {
@@ -22,14 +25,27 @@ export function WorkspacePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { showToast } = useToast()
+  const queryClient = useQueryClient()
+  const isDashboard = !['/inbox', '/calendar', '/meetings', '/sheets', '/goals', '/tasks', '/notes', '/connections'].includes(location.pathname)
+  const isSheetsPage = location.pathname === '/sheets'
 
   useEffect(() => {
     if (!role) navigate('/onboarding')
   }, [role, navigate])
 
+  useEffect(() => {
+    document.title = isDashboard ? 'Your Dashboard | Intent Workspace' : isSheetsPage ? 'Sheets | Intent Workspace' : location.pathname === '/goals' ? 'Goals | Intent Workspace' : 'Intent Workspace'
+    return () => { document.title = 'Intent Workspace' }
+  }, [isDashboard, isSheetsPage, location.pathname])
+
   const { data: roles } = useQuery({
     queryKey: ['roles'],
     queryFn: () => apiService.getRoles(),
+  })
+
+  const { data: sheets = [] } = useQuery({
+    queryKey: ['sheets'],
+    queryFn: () => apiService.getSheets(),
   })
 
   const { data: initialPlan, isLoading: planLoading, isError: planError, refetch: refetchPlan } = useQuery({
@@ -54,6 +70,39 @@ export function WorkspacePage() {
 
   const [isAiLoading, setIsAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [selectedSheetId, setSelectedSheetId] = useState('')
+
+  const handleDashboardSheetUpload = async (file: File) => {
+    const extension = file.name.toLowerCase().split('.').pop() ?? ''
+    if (!['xlsx', 'xls', 'csv'].includes(extension)) {
+      showToast('Choose an .xlsx, .xls, or .csv file.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('File size must be 10 MB or less.')
+      return
+    }
+
+    try {
+      const { parseSheetFile } = await import('@/features/workspace/sheets/parseSheetFile')
+      const parsed = parseSheetFile(file.name, await file.arrayBuffer())
+      const saved = await apiService.createSheet({
+        name: parsed.name,
+        source: extension === 'csv' ? 'csv_upload' : 'excel_upload',
+        file_name: file.name,
+        file_size: file.size,
+        row_count: parsed.rows.length,
+        column_count: parsed.columns.length,
+        columns: parsed.columns,
+        rows: parsed.rows,
+      })
+      queryClient.setQueryData<SheetRecord[]>(['sheets'], current => [saved, ...(current ?? []).filter(sheet => sheet.id !== saved.id)])
+      setSelectedSheetId(saved.id)
+      showToast(`${saved.name} is ready. Describe the dashboard you want.`)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'The sheet could not be uploaded.')
+    }
+  }
 
   useEffect(() => {
     if (initialPlan && initialPrefs) {
@@ -163,6 +212,25 @@ export function WorkspacePage() {
     setIsAiLoading(true)
     setAiError(null)
     try {
+      const selectedSheet = sheets.find(sheet => sheet.id === selectedSheetId)
+      if (selectedSheet) {
+        const analysis = await apiService.analyzeSheet(selectedSheet.id, { role: role.id, intent: prompt })
+        const result = await apiService.addSheetToDashboard(selectedSheet.id, role.id)
+        const sheetPlan = analysis.dashboard_plan
+        setPlanHistory(prev => [...prev, currentPlan])
+        syncPrefs({ ...prefs, hidden_ids: [] })
+        setCurrentPlan({
+          ...currentPlan,
+          title: sheetPlan?.title ?? `${selectedSheet.name} insights`,
+          explanation: sheetPlan?.explanation ?? `Generated an interactive dashboard from ${selectedSheet.name}.`,
+          clarificationQuestion: sheetPlan?.clarificationQuestion ?? null,
+          theme: sheetPlan?.theme ?? analysis.theme,
+          widgets: result.widgets,
+        })
+        showToast(`Dashboard generated from ${selectedSheet.name}`)
+        return
+      }
+
       const updatedPlan = await apiService.postPrompt({
         prompt, role: role.id, currentWidgets: currentPlan.widgets,
         pinnedIds: prefs.pinned_ids, hiddenIds: prefs.hidden_ids
@@ -192,15 +260,58 @@ export function WorkspacePage() {
     }
   }
 
+  const addSheetToDashboard = async (sheet: SheetRecord) => {
+    if (!currentPlan) {
+      showToast('Dashboard data is not ready yet. Try again shortly.')
+      return
+    }
+
+    if (!role) return
+
+    try {
+      const result = await apiService.addSheetToDashboard(sheet.id, role.id)
+      const existingIds = new Set(currentPlan.widgets.map(widget => widget.id))
+      const additions = result.widgets.filter(widget => !existingIds.has(widget.id))
+      if (additions.length === 0) {
+        showToast('Insights from this sheet are already on your dashboard.')
+        return
+      }
+      const nextOrder = Math.max(0, ...currentPlan.widgets.map(item => item.order)) + 1
+      const widgets: WidgetModel[] = additions.map((widget, index) => ({
+        ...widget,
+        order: nextOrder + index,
+      }))
+      setPlanHistory(history => [...history, currentPlan])
+      setCurrentPlan({ ...currentPlan, widgets: [...currentPlan.widgets, ...widgets] })
+      showToast(result.aiInsightsAvailable
+        ? 'Sheet insights added to dashboard. Use Undo to revert.'
+        : 'Calculated sheet widgets added; AI insights were unavailable. Use Undo to revert.')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Sheet could not be added to the dashboard.')
+    }
+  }
+
+  const removeSheetWidgetFromDashboard = (widgetId: string) => {
+    if (!currentPlan || !widgetId.startsWith('sheet-')) return
+    setPlanHistory(history => [...history, currentPlan])
+    setCurrentPlan({
+      ...currentPlan,
+      widgets: currentPlan.widgets.filter(widget => widget.id !== widgetId),
+    })
+    showToast('Sheet widget removed. Use Undo to restore it.')
+  }
+
   if (!role) return null
 
   const mainNav = [
-    { label: "Today", icon: <Clock className="w-4 h-4" /> },
+    { label: "Your Dashboard", icon: <LayoutDashboard className="w-4 h-4" />, path: '/your-dashboard' },
     { label: "Inbox", icon: <Mail className="w-4 h-4" /> },
     { label: "Calendar", icon: <Calendar className="w-4 h-4" /> },
-    { label: "Meetings", icon: <LayoutDashboard className="w-4 h-4" /> },
-    { label: "Tasks", icon: <CheckSquare className="w-4 h-4" /> },
-    { label: "Notes", icon: <FileText className="w-4 h-4" /> }
+    { label: "Meetings", icon: <Clock className="w-4 h-4" /> },
+    { label: "Sheets", icon: <Table2 className="w-4 h-4" /> },
+    { label: "Goals", icon: <Target className="w-4 h-4" /> },
+    { label: "Notes", icon: <FileText className="w-4 h-4" /> },
+    { label: "Tasks", icon: <CheckSquare className="w-4 h-4" /> }
   ]
 
   return (
@@ -219,10 +330,10 @@ export function WorkspacePage() {
         <div className="flex-1 py-4 overflow-y-auto">
           <nav className="px-3 space-y-0.5 mb-8">
             {mainNav.map(nav => {
-              const path = `/${nav.label.toLowerCase()}`
-              const isActive = location.pathname === path || (location.pathname === '/workspace' && nav.label === 'Today')
+              const navPath = nav.path || `/${nav.label.toLowerCase()}`
+              const isActive = location.pathname === navPath || (location.pathname === '/workspace' && nav.label === 'Your Dashboard')
               return (
-                <button key={nav.label} onClick={() => navigate(path)} className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors", isActive ? "bg-brand-50 text-brand-700" : "text-surface-600 hover:bg-surface-50 hover:text-surface-900")}>
+                <button key={nav.label} onClick={() => navigate(navPath)} className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors", isActive ? "bg-brand-50 text-brand-700" : "text-surface-600 hover:bg-surface-50 hover:text-surface-900")}>
                   {nav.icon} {nav.label}
                 </button>
               )
@@ -277,10 +388,20 @@ export function WorkspacePage() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-y-auto relative">
-        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-surface-200 sticky top-0 z-10 px-8 flex items-center justify-between">
+        <header className="h-16 bg-gradient-to-r from-white via-brand-50/30 to-white backdrop-blur-md border-b border-surface-200 sticky top-0 z-10 px-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold text-surface-900">{role.name} Dashboard</h2>
-            <div className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-warning/10 text-warning-dark border border-warning/20">Demo Data</div>
+            <h2
+              className="text-xl font-bold text-surface-900"
+              aria-label={isDashboard ? 'Your Dashboard' : isSheetsPage ? 'Sheets' : `${role.name} Dashboard`}
+            >
+              {isDashboard ? 'Your Dashboard' : isSheetsPage ? 'Sheets' : `${role.name} Dashboard`}
+            </h2>
+            {isDashboard && (
+              <span className="hidden sm:inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 border border-indigo-100">
+                {role.name}
+              </span>
+            )}
+            <div className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200">Demo Data</div>
             <div className="text-xs font-medium text-surface-400 ml-2 hidden sm:block">Connected apps: mock mode</div>
           </div>
           
@@ -328,22 +449,29 @@ export function WorkspacePage() {
           
           {/* Quick Actions Row */}
           <div className="flex gap-3 mb-8 overflow-x-auto pb-2">
-            <Button variant="outline" className="bg-white hover:bg-brand-50 hover:text-brand-700 border-surface-200 shadow-sm shrink-0" onClick={() => handlePromptSubmit("Schedule a meeting")}>
-              <CalendarPlus className="w-4 h-4 mr-2 text-brand-500" /> Schedule meeting
+            <Button variant="outline" className="bg-indigo-50/60 hover:bg-indigo-100 hover:text-indigo-700 border-indigo-200 text-indigo-700 shadow-sm shrink-0" onClick={() => handlePromptSubmit("Schedule a meeting")}>
+              <CalendarPlus className="w-4 h-4 mr-2 text-indigo-500" /> Schedule meeting
             </Button>
-            <Button variant="outline" className="bg-white hover:bg-brand-50 hover:text-brand-700 border-surface-200 shadow-sm shrink-0" onClick={() => handlePromptSubmit("Add a task")}>
-              <CheckSquare className="w-4 h-4 mr-2 text-brand-500" /> Add task
+            <Button variant="outline" className="bg-emerald-50/60 hover:bg-emerald-100 hover:text-emerald-700 border-emerald-200 text-emerald-700 shadow-sm shrink-0" onClick={() => handlePromptSubmit("Add a task")}>
+              <CheckSquare className="w-4 h-4 mr-2 text-emerald-500" /> Add task
             </Button>
-            <Button variant="outline" className="bg-white hover:bg-brand-50 hover:text-brand-700 border-surface-200 shadow-sm shrink-0" onClick={() => handlePromptSubmit("Take a note")}>
-              <FileText className="w-4 h-4 mr-2 text-brand-500" /> Add note
+            <Button variant="outline" className="bg-amber-50/60 hover:bg-amber-100 hover:text-amber-700 border-amber-200 text-amber-700 shadow-sm shrink-0" onClick={() => handlePromptSubmit("Take a note")}>
+              <FileText className="w-4 h-4 mr-2 text-amber-500" /> Add note
             </Button>
-            <Button variant="outline" className="bg-white hover:bg-brand-50 hover:text-brand-700 border-surface-200 shadow-sm shrink-0" onClick={() => handlePromptSubmit("Summarize my day")}>
-              <Zap className="w-4 h-4 mr-2 text-brand-500" /> Summarize day
+            <Button variant="outline" className="bg-violet-50/60 hover:bg-violet-100 hover:text-violet-700 border-violet-200 text-violet-700 shadow-sm shrink-0" onClick={() => handlePromptSubmit("Summarize my day")}>
+              <Zap className="w-4 h-4 mr-2 text-violet-500" /> Summarize day
             </Button>
           </div>
 
           <div className="mb-10 text-center">
-            <PromptComposer isLoading={isAiLoading} onSubmit={handlePromptSubmit} />
+            <PromptComposer
+              isLoading={isAiLoading}
+              onSubmit={handlePromptSubmit}
+              sheets={sheets}
+              selectedSheetId={selectedSheetId}
+              onSelectedSheetChange={setSelectedSheetId}
+              onUploadSheet={handleDashboardSheetUpload}
+            />
             <div className="mt-8 text-left max-w-3xl mx-auto">
               {aiError ? (
                 <div className="p-4 bg-danger/10 border border-danger/20 rounded-xl flex items-center justify-between">
@@ -376,13 +504,16 @@ export function WorkspacePage() {
                   </div>
                 </div>
               ) : currentPlan?.explanation && planHistory.length > 0 ? (
-                <div className="bg-brand-50/50 border border-brand-100 p-4 rounded-2xl flex items-start gap-3">
-                  <div className="bg-white p-1.5 rounded-full shadow-sm shrink-0 mt-0.5 text-brand-500">
+                <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 p-4 rounded-2xl flex items-start gap-3">
+                  <div className="bg-white p-1.5 rounded-full shadow-sm shrink-0 mt-0.5 text-violet-500">
                     <Sparkles className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-brand-900 text-sm tracking-wide uppercase mb-1">AI Suggestion</h3>
-                    <p className="text-brand-800 font-medium">{currentPlan.explanation}</p>
+                    <h3 className="font-bold text-violet-900 text-sm tracking-wide uppercase mb-1 flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full bg-violet-400"></span>
+                      AI Suggestion
+                    </h3>
+                    <p className="text-violet-800 font-medium">{currentPlan.explanation}</p>
                   </div>
                 </div>
               ) : null}
@@ -395,6 +526,10 @@ export function WorkspacePage() {
             <CalendarPage />
           ) : location.pathname === '/meetings' ? (
             <MeetingsPage />
+          ) : location.pathname === '/sheets' ? (
+            <SheetsPage role={role.id} onAddToDashboard={addSheetToDashboard} />
+          ) : location.pathname === '/goals' ? (
+            <GoalsPage />
           ) : location.pathname === '/tasks' ? (
             <TasksPage />
           ) : location.pathname === '/notes' ? (
@@ -412,7 +547,10 @@ export function WorkspacePage() {
               onMoveUp={handleMoveUp}
               onMoveDown={handleMoveDown}
               onResize={handleResize}
+              onRemoveSheetWidget={removeSheetWidgetFromDashboard}
+              onReset={resetFilters}
               onScheduleMeeting={handleScheduleMeeting}
+              theme={currentPlan?.theme}
             />
           )}
         </div>

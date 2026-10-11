@@ -1,10 +1,15 @@
-import React, { useState } from 'react'
-import { Sparkles, Loader2 } from 'lucide-react'
+import React, { useRef, useState } from 'react'
+import { FileSpreadsheet, Loader2, Sparkles, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import type { SheetRecord } from '@/lib/sheets'
 
 interface PromptComposerProps {
   isLoading: boolean
   onSubmit: (prompt: string) => void
+  sheets: SheetRecord[]
+  selectedSheetId: string
+  onSelectedSheetChange: (sheetId: string) => void
+  onUploadSheet: (file: File) => Promise<void>
 }
 
 const SUGGESTED_CHIPS = [
@@ -14,8 +19,9 @@ const SUGGESTED_CHIPS = [
   "Create follow-up tasks"
 ]
 
-export function PromptComposer({ isLoading, onSubmit }: PromptComposerProps) {
+export function PromptComposer({ isLoading, onSubmit, sheets, selectedSheetId, onSelectedSheetChange, onUploadSheet }: PromptComposerProps) {
   const [prompt, setPrompt] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
@@ -58,6 +64,48 @@ export function PromptComposer({ isLoading, onSubmit }: PromptComposerProps) {
           </Button>
         </div>
       </form>
+
+      <div className="mx-auto mb-4 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-left">
+        <label htmlFor="dashboard-sheet-context" className="shrink-0 text-xs font-bold uppercase tracking-wide text-surface-500">
+          Use sheet context
+        </label>
+        <select
+          id="dashboard-sheet-context"
+          value={selectedSheetId}
+          onChange={event => onSelectedSheetChange(event.target.value)}
+          disabled={isLoading}
+          className="min-w-[220px] flex-1 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm font-semibold text-surface-700 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+        >
+          <option value="">No sheet selected</option>
+          {sheets.map(sheet => (
+            <option key={sheet.id} value={sheet.id}>
+              {sheet.name} {sheet.status === 'analyzed' ? '• analyzed' : '• ready to analyze'}
+            </option>
+          ))}
+        </select>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={event => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (file) void onUploadSheet(file)
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isLoading}
+          onClick={() => fileInputRef.current?.click()}
+          className="shrink-0"
+        >
+          <Upload className="mr-2 h-4 w-4" />
+          <span className="hidden sm:inline">Upload sheet</span>
+          <FileSpreadsheet className="h-4 w-4 sm:hidden" />
+        </Button>
+      </div>
 
       {/* Suggested Chips */}
       <div className="flex flex-wrap items-center justify-center gap-2">

@@ -1,6 +1,8 @@
 import { DashboardPlan } from '@/lib/api'
 import { WidgetRenderer } from './WidgetRenderer'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { Button } from '@/components/ui/Button'
+import { LayoutDashboard, RotateCcw } from 'lucide-react'
 
 interface DashboardGridProps {
   plan: DashboardPlan | undefined
@@ -12,10 +14,13 @@ interface DashboardGridProps {
   onMoveUp: (id: string) => void
   onMoveDown: (id: string) => void
   onResize: (id: string) => void
+  onRemoveSheetWidget: (id: string) => void
+  onReset: () => void
   onScheduleMeeting?: (req: any) => Promise<void>
+  theme?: string
 }
 
-export function DashboardGrid({ plan, isLoading, pinnedIds, hiddenIds, onTogglePin, onHide, onMoveUp, onMoveDown, onResize, onScheduleMeeting }: DashboardGridProps) {
+export function DashboardGrid({ plan, isLoading, pinnedIds, hiddenIds, onTogglePin, onHide, onMoveUp, onMoveDown, onResize, onRemoveSheetWidget, onReset, onScheduleMeeting, theme }: DashboardGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -55,12 +60,26 @@ export function DashboardGrid({ plan, isLoading, pinnedIds, hiddenIds, onToggleP
           onMoveUp={onMoveUp}
           onMoveDown={onMoveDown}
           onResize={onResize}
+          onRemoveSheetWidget={onRemoveSheetWidget}
           onScheduleMeeting={onScheduleMeeting}
+          theme={theme}
         />
       ))}
       {visibleWidgets.length === 0 && (
-        <div className="col-span-full py-12 text-center text-surface-500 border-2 border-dashed border-surface-200 rounded-2xl">
-          All widgets are hidden. Use the "Reset to default" button to bring them back.
+        <div className="col-span-full flex flex-col items-center rounded-2xl border-2 border-dashed border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-violet-50 px-6 py-12 text-center">
+          <div className="mb-4 rounded-2xl bg-indigo-100 p-3 text-indigo-700">
+            <LayoutDashboard className="h-7 w-7" aria-hidden="true" />
+          </div>
+          <h3 className="text-base font-bold text-surface-900">Your dashboard is clear</h3>
+          <p className="mt-1 max-w-sm text-sm text-surface-600">All widgets are hidden. Restore your default layout to bring them back.</p>
+          <Button
+            variant="outline"
+            className="mt-5 border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+            onClick={onReset}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+            Reset to default
+          </Button>
         </div>
       )}
     </div>

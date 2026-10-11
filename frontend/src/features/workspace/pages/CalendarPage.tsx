@@ -15,11 +15,13 @@ import {
   CalendarDays,
 } from 'lucide-react'
 import { useToast } from '@/app/providers/ToastProvider'
+import { SheetMeetingPrep } from '@/features/workspace/components/SheetMeetingPrep'
 import {
   apiService,
   CalendarEventFull,
   CalendarEventCreatePayload,
   CalendarEventUpdatePayload,
+  CalendarSheetAttachment,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -144,6 +146,19 @@ export function CalendarPage() {
 
   // Detail panel
   const [detailEvent, setDetailEvent] = useState<CalendarEventFull | null>(null)
+  const [sheetAttachments, setSheetAttachments] = useState<CalendarSheetAttachment[]>([])
+  const [attachmentError, setAttachmentError] = useState('')
+
+  useEffect(() => {
+    if (!detailEvent) {
+      setSheetAttachments([])
+      setAttachmentError('')
+      return
+    }
+    void apiService.getCalendarSheetAttachments(detailEvent.id)
+      .then(setSheetAttachments)
+      .catch(error => setAttachmentError(error instanceof Error ? error.message : 'Attached sheet analysis could not be loaded.'))
+  }, [detailEvent?.id])
 
   // ── Fetch events ─────────────────────────────────────────
 
@@ -771,6 +786,13 @@ export function CalendarPage() {
               <div className="pt-2 border-t border-surface-100">
                 <p className="text-sm text-surface-600 whitespace-pre-wrap">{detailEvent.description}</p>
               </div>
+            )}
+            {attachmentError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">{attachmentError}</p>}
+            {sheetAttachments.length > 0 && (
+              <section className="space-y-3 border-t border-surface-100 pt-4" aria-label="Sheet analysis meeting preparation">
+                <h4 className="font-bold text-surface-900">Meeting preparation · attached sheet analysis</h4>
+                {sheetAttachments.map(attachment => <SheetMeetingPrep key={attachment.sheet_id} attachment={attachment} />)}
+              </section>
             )}
           </div>
         </div>
