@@ -1,44 +1,24 @@
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
 import { StatusIndicator } from '@/components/StatusIndicator'
-import { UserProvider, useUser } from '@/app/providers/UserProvider'
+import { UserProvider } from '@/app/providers/UserProvider'
 import { ToastProvider } from '@/app/providers/ToastProvider'
 import { OnboardingPage } from '@/features/onboarding/OnboardingPage'
 import { WorkspacePage } from '@/features/workspace/WorkspacePage'
 import { AuthPage } from '@/features/auth/AuthPage'
 import { ArrowRight, LogIn, Sparkles } from 'lucide-react'
 import { IntentLogo } from '@/features/auth/components/IntentLogo'
-
 // Home page component
 function Home() {
   const navigate = useNavigate()
-  const { role } = useUser()
-
   return (
     <div className="min-h-screen flex flex-col bg-surface-50 relative overflow-hidden">
-      {/* Background decorations - light theme variations */}
+      {/* Background decorations */}
       <div className="absolute top-0 inset-x-0 h-[500px] bg-gradient-to-b from-brand-100/50 to-transparent pointer-events-none" />
       <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand-400 rounded-full opacity-10 blur-[100px] pointer-events-none" />
-      
       {/* Top Navbar */}
       <nav className="w-full max-w-6xl mx-auto px-6 py-5 flex items-center justify-between relative z-20">
         <IntentLogo size="md" showText subtitle="Adaptive Productivity Workspace" />
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/login')}
-            className="px-4 py-2 text-sm font-semibold text-surface-700 hover:text-surface-900 transition-colors inline-flex items-center gap-1.5"
-          >
-            <LogIn className="w-4 h-4 text-brand-600" />
-            <span>Sign In</span>
-          </button>
-          <button
-            onClick={() => navigate('/auth')}
-            className="btn-primary text-sm px-4 py-2 shadow-sm"
-          >
-            Get Started
-          </button>
-        </div>
       </nav>
-
       {/* Main Content */}
       <main className="flex-1 flex flex-col items-center justify-center p-6 relative z-10">
         <div className="flex flex-col items-center text-center gap-6 mb-12 max-w-2xl animate-slide-up">
@@ -57,9 +37,9 @@ function Home() {
           <p className="text-xl text-surface-600 max-w-lg mx-auto leading-relaxed">
             An AI-powered adaptive professional workspace that organizes meetings, tasks, notes, and messages around your intent.
           </p>
-
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
-            <button 
+          {/* Centered action buttons */}
+          <div className="mt-4 flex flex-col items-center justify-center gap-4 w-full">
+            <button
               onClick={() => navigate('/login')}
               className="btn-primary shadow-lg shadow-brand-500/20 text-lg px-8 py-3"
             >
@@ -68,27 +48,30 @@ function Home() {
               <ArrowRight className="w-5 h-5 ml-1" />
             </button>
             <button
-              onClick={() => navigate(role ? '/workspace' : '/onboarding')}
+              onClick={() => navigate('/signup')}
               className="btn-ghost text-base px-6 py-3 border border-surface-300 bg-white"
             >
-              {role ? 'Go to Dashboard' : 'Explore Demo Roles'}
+              Get Started
             </button>
           </div>
         </div>
-
-        <div className="w-full animate-slide-up" style={{ animationDelay: '0.1s' }}>
+        {/* API Status */}
+        <div
+          className="w-full animate-slide-up"
+          style={{ animationDelay: '0.1s' }}
+        >
           <StatusIndicator />
         </div>
       </main>
-      
       {/* Footer */}
       <footer className="py-6 text-center text-sm text-surface-500 relative z-10 border-t border-surface-200 bg-white/50 backdrop-blur-sm">
-        <p>Intent Workspace Prototype &copy; {new Date().getFullYear()} — Built with AI-driven adaptive design</p>
+        <p>
+          Intent Workspace Prototype &copy; {new Date().getFullYear()} — Built with AI-driven adaptive design
+        </p>
       </footer>
     </div>
   )
 }
-
 function App() {
   return (
     <ToastProvider>
@@ -108,5 +91,4 @@ function App() {
     </ToastProvider>
   )
 }
-
 export default App

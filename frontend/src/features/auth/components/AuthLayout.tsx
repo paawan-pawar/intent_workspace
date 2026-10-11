@@ -15,6 +15,10 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
   currentScreen,
   onSwitchScreen,
 }) => {
+  const showQuickFlowSwitcher = Boolean(
+    onSwitchScreen && currentScreen !== 'login' && currentScreen !== 'signup',
+  )
+
   return (
     <div className="min-h-screen w-full bg-surface-50 flex flex-col justify-between selection:bg-brand-500 selection:text-white">
       {/* Top utility bar with quick screen switcher tabs for demo/testing */}
@@ -27,11 +31,11 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
         </div>
 
         {/* Quick flow switcher tabs */}
-        {onSwitchScreen && (
+        {showQuickFlowSwitcher && (
           <div className="flex items-center gap-1 bg-surface-100/90 p-1 rounded-xl border border-surface-200 text-xs font-semibold">
             <button
               type="button"
-              onClick={() => onSwitchScreen('login')}
+              onClick={() => onSwitchScreen?.('login')}
               className={`px-3 py-1 rounded-lg transition-all ${
                 currentScreen === 'login'
                   ? 'bg-white text-brand-700 shadow-sm font-bold'
@@ -42,7 +46,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => onSwitchScreen('signup')}
+              onClick={() => onSwitchScreen?.('signup')}
               className={`px-3 py-1 rounded-lg transition-all ${
                 currentScreen === 'signup'
                   ? 'bg-white text-brand-700 shadow-sm font-bold'
@@ -53,7 +57,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => onSwitchScreen('otp')}
+              onClick={() => onSwitchScreen?.('otp')}
               className={`px-3 py-1 rounded-lg transition-all ${
                 currentScreen === 'otp'
                   ? 'bg-white text-brand-700 shadow-sm font-bold'
@@ -64,7 +68,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => onSwitchScreen('forgot')}
+              onClick={() => onSwitchScreen?.('forgot')}
               className={`px-3 py-1 rounded-lg transition-all ${
                 currentScreen === 'forgot'
                   ? 'bg-white text-brand-700 shadow-sm font-bold'
